@@ -1,6 +1,9 @@
 //! «Поиск по моим файлам»: indexes a folder (txt/md/docx/pdf via textx) into ~800-char chunks with
-//! 100-char overlap and embeddings. Embedding service, in order: a custom URL, the phone service
-//! (PC port 50160 when it answers), else a PC llama-server on 127.0.0.1:50070 with nomic-embed-text-v1.5.
+//! 100-char overlap and embeddings. Embedding service, in order: a custom URL, nodes with the «Поиск» role
+//! (nodesvc "embeddings"; PC port 50160 = first USB phone), else a PC llama-server on 127.0.0.1:50070 with
+//! nomic-embed-text-v1.5 (the same Q8_0 file the «Поиск» role sends to nodes, when it is already on the PC, so node and PC
+//! vectors are interchangeable). 0.4: a node that stops answering mid-index / mid-search is skipped and the work
+//! continues on the next node or the PC.
 //! Index: argus-rag.json next to the settings (vectors as base64 little-endian f32, file mtimes to skip
 //! unchanged files, the model name — search is refused when the current service runs another model).
 use crate::state::AppState;
@@ -123,17 +126,19 @@ async fn model_name(client: &reqwest::Client, base: &str) -> String {
     id.map(|s| norm_model(&s)).unwrap_or_else(|| "nomic-embed-text-v1.5".into())
 }
 
-/// Picks the embedding service and returns (base url, model name).
-async fn service(st: &AppState, app: Option<&AppHandle>, custom: &str) -> Result<(String, String), String> {
+fn pc_base() -> String { format!("http://127.0.0.1:{PC_PORT}") }
+
+/// Picks the embedding service and returns (base url, model name). `failed` = node bases that stopped answering.
+async fn service(st: &AppState, app: Option<&AppHandle>, custom: &str, failed: &[String]) -> Result<(String, String), String> {
     let client = reqwest::Client::new();
     let custom = custom.trim().trim_end_matches('/').to_string();
     if !custom.is_empty() {
         return Ok((custom.clone(), model_name(&client, &custom).await));
     }
     let mut phones = crate::nodesvc::ready_bases("embeddings");
-    if !phones.iter().any(|b| b == PHONE_URL) { phones.push(PHONE_URL.into()); }
-    for b in phones { if health(&client, &b).await { return Ok((b.clone(), model_name(&client, &b).await)); } }
-    let pc = format!("http://127.0.0.1:{PC_PORT}");
+    phones.push(PHONE_URL.into());
+    for b in crate::route::embed_bases("", &phones, failed) { if health(&client, &b).await { return Ok((b.clone(), model_name(&client, &b).await)); } }
+    let pc = pc_base();
     if health(&client, &pc).await { return Ok((pc.clone(), model_name(&client, &pc).await)); }
     // start our own small embedding server on the PC CPU
     {
@@ -147,7 +152,10 @@ async fn service(st: &AppState, app: Option<&AppHandle>, custom: &str) -> Result
             let cache = crate::llama::model_cache_dir();
             let _ = std::fs::create_dir_all(&cache);
             c.env("HF_HOME", &cache).env("HF_HUB_CACHE", cache.join("hub")).env("LLAMA_CACHE", &cache);
-            c.args(["-hf", PC_MODEL, "--embeddings", "--pooling", "mean", "-ngl", "0", "--host", "127.0.0.1", "--port", &PC_PORT.to_string(), "-c", "2048", "-b", "2048", "-ub", "2048"]);
+            // the «Поиск» role's model file (roles_extra.rs) when it is on the PC: no second download
+            let local = crate::helper::helpers_dir().join(crate::roles_extra::SEARCH_FILE);
+            if std::fs::metadata(&local).map(|m| m.len() > 0).unwrap_or(false) { c.arg("-m").arg(&local); } else { c.args(["-hf", PC_MODEL]); }
+            c.args(["--embeddings", "--pooling", "mean", "-ngl", "0", "--host", "127.0.0.1", "--port", &PC_PORT.to_string(), "-c", "2048", "-b", "2048", "-ub", "2048"]);
             c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).kill_on_drop(true);
             *g = Some(c.spawn().map_err(|e| format!("не удалось запустить сервис поиска: {e}"))?);
         }
@@ -251,8 +259,20 @@ pub async fn rag_index(app: AppHandle, state: State<'_, Arc<AppState>>, folder: 
     Ok(status_now().await)
 }
 
+/// The node at `base` failed: next node or the PC, which must run the same model as the index.
+async fn failover(st: &AppState, app: Option<&AppHandle>, url: &str, base: &str, model: &str, failed: &mut Vec<String>, err: String) -> Result<String, String> {
+    if !url.trim().is_empty() || base == pc_base() || failed.len() >= 4 { return Err(err); }
+    log::warn!("rag: {base} failed ({err}), switching");
+    failed.push(base.to_string());
+    if let Some(a) = app { set_msg(a, "Нода «Поиск» не отвечает — продолжаю на другой ноде или на ПК…").await; }
+    let (b, m) = service(st, app, url, failed).await?;
+    if m != model { return Err(format!("{err} (запасной сервис поиска работает с другой моделью «{m}»)")); }
+    Ok(b)
+}
+
 async fn run_index(app: &AppHandle, st: &AppState, folder: String, url: String) -> Result<String, String> {
-    let (base, model) = service(st, Some(app), &url).await?;
+    let mut failed: Vec<String> = Vec::new();
+    let (mut base, model) = service(st, Some(app), &url, &failed).await?;
     let client = reqwest::Client::new();
     let files = crate::textx::list_files(Path::new(&folder), true);
     if files.is_empty() { return Err("В папке нет файлов .txt, .md, .docx или .pdf".into()); }
@@ -287,7 +307,13 @@ async fn run_index(app: &AppHandle, st: &AppState, folder: String, url: String) 
                 let mut chunks = Vec::new();
                 for batch in pieces.chunks(16) {
                     let inputs: Vec<String> = batch.iter().map(|t| format!("search_document: {t}")).collect();
-                    let vecs = embed(&client, &base, &inputs).await?;
+                    let vecs = loop {
+                        let r = embed(&client, &base, &inputs).await;
+                        match r {
+                            Ok(v) => break v,
+                            Err(e) => { let next = failover(st, Some(app), &url, &base, &model, &mut failed, e).await?; base = next; }
+                        }
+                    };
                     for (t, mut v) in batch.iter().zip(vecs) { normalize(&mut v); chunks.push(Chunk { text: t.clone(), v: enc(&v) }); }
                 }
                 fresh += 1;
@@ -313,12 +339,20 @@ pub async fn rag_search(state: State<'_, Arc<AppState>>, query: String, k: Optio
         (idx.model.clone(), idx.custom_url.clone(), idx.files.values().all(|f| f.chunks.is_empty()))
     };
     if empty { return Err("Индекс пуст — сначала проиндексируйте папку во вкладке «Знания»".into()); }
-    let (base, cur) = service(&state, None, &custom).await?;
+    let mut failed: Vec<String> = Vec::new();
+    let (mut base, cur) = service(&state, None, &custom, &failed).await?;
     if cur != model {
         return Err(format!("Индекс построен моделью «{model}», а сейчас сервис поиска работает с «{cur}». Переиндексируйте папку."));
     }
     let client = reqwest::Client::new();
-    let mut q = embed(&client, &base, &[format!("search_query: {}", query.trim())]).await?.pop().ok_or("пустой ответ")?;
+    let input = [format!("search_query: {}", query.trim())];
+    let mut q = loop {
+        let r = embed(&client, &base, &input).await;
+        match r {
+            Ok(v) => break v,
+            Err(e) => { let next = failover(&state, None, &custom, &base, &model, &mut failed, e).await?; base = next; }
+        }
+    }.pop().ok_or("пустой ответ")?;
     normalize(&mut q);
     let k = k.unwrap_or(5).clamp(1, 20);
     let g = rag().index.lock().await;

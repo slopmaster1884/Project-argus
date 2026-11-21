@@ -1,5 +1,5 @@
 // 0.3.2 «Параллельный тест»: one prompt to the main model and every ready «Помощник» at once,
-// answers side by side with tok/s each. Experiment «Роли».
+// answers side by side with tok/s each. «Роли».
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { Columns3, CornerDownLeft, FlaskConical, Loader2, Network, Square, Trophy } from "lucide-react";
@@ -181,7 +181,7 @@ export default function ParallelTest() {
           <FlaskConical size={22} className="text-pl-violet" />
           <div className="max-w-md text-xs leading-5 text-pl-mute">
             Здесь один вопрос уходит сразу основной модели и всем готовым Помощникам — ответы видно рядом, со скоростью каждого.
-            Включите эксперимент «Роли» в Cluster и дайте свободной ноде роль «Помощник», или загрузите модель в Models.
+            Включите «Роли» в Кластере и дайте свободной ноде роль «Помощник», или загрузите модель в Models.
           </div>
           <div className="flex gap-2">
             <button className="btn" onClick={() => setView("devices")}><Network size={12} /> Открыть Cluster</button>

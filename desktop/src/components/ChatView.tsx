@@ -471,7 +471,7 @@ function SessionPanel() {
   );
 }
 
-/** «Помощники» in the session panel (experiment «Роли»). */
+/** «Помощники» in the session panel («Роли»). */
 function HelpersMini() {
   const { snapshot, setView } = useCluster();
   if (!snapshot?.rolesEnabled || !snapshot.helpers.length) return null;

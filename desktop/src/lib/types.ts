@@ -38,7 +38,7 @@ export interface ClusterNode {
   speedMeasured: boolean;    // speed comes from a real measurement (false = estimate)
   role: NodeRole;            // chosen by the user
   assigned: NodeAssigned;    // what the current plan does with it
-  helper: HelperView | null; // «Помощник» status (experiment «Роли»)
+  helper: HelperView | null; // «Помощник» status («Роли»)
   // ---- 0.3.3 (eng-core): device temperature
   tempC?: number | null;     // °C (battery/SoC for phones), null = unknown
   throttled?: boolean;       // the device slows down from heat («греется»)
@@ -142,7 +142,7 @@ export interface ClusterSnapshot {
   freeNodes: string[];           // online nodes the model doesn't need («Свободна»)
   estTps: number | null;         // rough tok/s estimate for the planned split
   fits: boolean;
-  rolesEnabled: boolean;         // experiment «Роли»
+  rolesEnabled: boolean;         // «Роли» (Помощник): on by default since 0.4 (was an experiment in 0.3.x)
   helperModel: string;           // id from helperModels or "owner/repo/file.gguf"
   helperModels: HelperModelView[];
   helpers: HelperView[];         // nodes with the «Помощник» role (any state)

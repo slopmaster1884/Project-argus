@@ -1,6 +1,6 @@
 //! Persistent user settings (JSON in the app config dir): LAN nodes, per-device speed weights,
 //! disabled devices, fast start, Wi-Fi auto-add, keep-loaded + last deploy, update checks / skipped versions,
-//! 0.3.2: node roles, autobench cache, «Роли» experiment + helper model.
+//! 0.3.2: node roles, autobench cache, «Роли» (experiment until 0.4, now on by default) + helper model.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -52,8 +52,11 @@ pub struct Settings {
     pub roles: HashMap<String, String>,
     /// 0.3.2 autobench cache: "<serial or lan id>|<node app version>" -> result
     pub bench: HashMap<String, BenchResult>,
-    /// 0.3.2 experiment «Роли» (off by default): the «Помощник» role and everything that uses it
+    /// «Роли» (0.3.2 experiment, a normal feature since 0.4, on by default): the «Помощник» role and everything that uses it.
+    /// Settings from 0.3.x are migrated once (`roles_v04`, route::migrate_roles_enabled): an explicit «off» is kept.
     pub roles_enabled: bool,
+    /// 0.4 migration of `roles_enabled` done (false in files written by 0.3.x)
+    pub roles_v04: bool,
     /// helper model id (helper::HELPER_MODELS) — what a «Помощник» node runs
     pub helper_model: String,
     /// speculative decoding with a small draft model (-md), off by default
@@ -85,7 +88,7 @@ impl Default for Settings {
         Self { lan_nodes: vec![], weights: HashMap::new(), disabled: HashSet::new(), enabled: HashSet::new(), fast_start: true,
                auto_add_discovered: false, keep_loaded: true, last_launch: None,
                check_updates: true, skipped_version: None, skipped_node_version: None,
-               roles: HashMap::new(), bench: HashMap::new(), roles_enabled: false, helper_model: String::new(),
+               roles: HashMap::new(), bench: HashMap::new(), roles_enabled: true, roles_v04: false, helper_model: String::new(),
                draft_enabled: false, draft_path: None, usb_tether: HashSet::new(), usb_tether_switched: HashSet::new(),
                rpc_tokens: HashMap::new() }
     }
@@ -98,10 +101,21 @@ impl Settings {
     }
 
     pub fn load(path: &Option<PathBuf>) -> Self {
-        path.as_ref()
+        let mut s: Self = path.as_ref()
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        s.migrate();
+        s
+    }
+
+    /// 0.4: «Помощник» is no longer an experiment (saved with the next settings write).
+    pub fn migrate(&mut self) {
+        if !self.roles_v04 {
+            let any_helper = self.roles.values().any(|r| r == "helper");
+            self.roles_enabled = crate::route::migrate_roles_enabled(self.roles_enabled, any_helper);
+            self.roles_v04 = true;
+        }
     }
 
     pub fn save(&self, path: &Option<PathBuf>) {
@@ -143,5 +157,20 @@ mod tests {
         assert_eq!(parse_host_port("pi.local:6000").unwrap(), ("pi.local".into(), 6000));
         assert_eq!(parse_host_port("[fe80::1]:50053").unwrap(), ("fe80::1".into(), 50053));
         assert!(parse_host_port("a:b").is_err());
+    }
+    #[test]
+    fn roles_migration() {
+        // new install
+        let mut d = Settings::default(); d.migrate();
+        assert!(d.roles_enabled && d.roles_v04);
+        // 0.3.x file, experiment never used
+        let mut a: Settings = serde_json::from_str(r#"{"rolesEnabled":false}"#).unwrap(); a.migrate();
+        assert!(a.roles_enabled);
+        // 0.3.x file, helper assigned then experiment switched off: respected
+        let mut b: Settings = serde_json::from_str(r#"{"rolesEnabled":false,"roles":{"R58":"helper"}}"#).unwrap(); b.migrate();
+        assert!(!b.roles_enabled);
+        // 0.4 file with an explicit off: kept
+        let mut c: Settings = serde_json::from_str(r#"{"rolesEnabled":false,"rolesV04":true}"#).unwrap(); c.migrate();
+        assert!(!c.roles_enabled);
     }
 }

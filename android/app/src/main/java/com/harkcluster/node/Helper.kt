@@ -252,7 +252,8 @@ object Helper {
         File("/proc").listFiles { f -> f.name.all(Char::isDigit) }?.forEach { d ->
             val pid = d.name.toInt(); if (pid == me) return@forEach
             val cmd = runCatching { File(d, "cmdline").readText() }.getOrNull() ?: return@forEach
-            if (cmd.contains(LIB) && (own == null || !own.isAlive)) { android.os.Process.killProcess(pid); log("killed stale llama-server pid $pid") }
+            // 0.4: the «Поиск» role runs the same binary with --embedding (Embeddings in Roles.kt): not ours
+            if (cmd.contains(LIB) && !cmd.contains("--embedding") && (own == null || !own.isAlive)) { android.os.Process.killProcess(pid); log("killed stale llama-server pid $pid") }
         }
     }
 

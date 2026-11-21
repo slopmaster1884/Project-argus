@@ -422,7 +422,7 @@ class RpcService : Service() {
         state = State.OFF
         stopWifiExtras()
         AuthGateway.stop()
-        Helper.stop("node stopped"); Voice.stop("node stopped"); Library.stop("node stopped")   // assignments stay persisted
+        Helper.stop("node stopped"); Voice.stop("node stopped"); Library.stop("node stopped"); Embeddings.stop("node stopped")   // assignments stay persisted
         wakeLock?.takeIf { it.isHeld }?.release()
         addLog("node stopped")
         super.onDestroy()

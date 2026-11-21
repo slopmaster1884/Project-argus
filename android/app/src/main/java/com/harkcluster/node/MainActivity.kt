@@ -393,7 +393,8 @@ class MainActivity : Activity() {
         val model = Helper.model?.removeSuffix(".gguf")
         val linked = RpcService.state == RpcService.State.LINKED
         val (t, c, sub) = when {
-            h == "idle" && (Voice.active || Library.active) -> Triple(listOfNotNull(if (Voice.active) "Голос" else null, if (Library.active) "Библиотека" else null).joinToString(" + "),
+            h == "idle" && (Voice.active || Library.active || Embeddings.active) -> Triple(listOfNotNull(if (Voice.active) "Голос" else null,
+                if (Library.active) "Библиотека" else null, if (Embeddings.active) "Поиск" else null).joinToString(" + "),
                 CYAN, "Работает рядом с основной моделью на малых ядрах." + (if (linked) " Заодно держит часть основной модели." else ""))
             h != "idle" -> Triple("Помощник", CYAN, "Отвечает Argus на небольшие задачи своей маленькой моделью: названия чатов, сводки, параллельные ответы." +
                 (if (linked) " Заодно держит часть основной модели." else ""))
@@ -427,10 +428,11 @@ class MainActivity : Activity() {
             else -> "$n: ошибка — ${err ?: "неизвестно"}"
         }
         val lines = listOfNotNull(side("Голос", Voice.state, Voice.model, Voice.error, Voice.pct, Voice.PORT),
-            side("Библиотека", Library.state, Library.zim, Library.error, 0, Library.PORT))
+            side("Библиотека", Library.state, Library.zim, Library.error, 0, Library.PORT),
+            side("Поиск", Embeddings.state, Embeddings.model, Embeddings.error, Embeddings.pct, Embeddings.PORT))
         roleSide.text = lines.joinToString("\n")
         roleSide.visibility = if (lines.isEmpty()) View.GONE else View.VISIBLE
-        roleSide.setTextColor(if (Voice.state == "error" || Library.state == "error") RED else TEXT)
+        roleSide.setTextColor(if (Voice.state == "error" || Library.state == "error" || Embeddings.state == "error") RED else TEXT)
         val zs = Library.zims(this)
         zimStatus.text = when {
             Library.importPct in 0..99 -> "Копирую .zim: ${Library.importPct}%"

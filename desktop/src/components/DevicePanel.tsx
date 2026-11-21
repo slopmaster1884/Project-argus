@@ -48,7 +48,7 @@ export const ROLE_HINT: Record<NodeRole, string> = {
   auto: "Argus сам решает: нода берёт слои, только если модель без неё не помещается",
   model: "Всегда держит часть слоёв модели, даже если хватает остальных",
   free: "Не участвует в модели — устройство остаётся свободным",
-  helper: "Запускает свою маленькую модель рядом с основной (эксперимент «Роли»)",
+  helper: "Запускает свою маленькую модель рядом с основной: названия чатов, сводки, очередь, подзадачи агента",
 };
 const roleChoices = (snap: ClusterSnapshot, cur: NodeRole): NodeRole[] =>
   (["auto", "model", "free", "helper"] as NodeRole[]).filter((r) => r !== "helper" || snap.rolesEnabled || cur === "helper");
@@ -359,7 +359,7 @@ function RolePicker({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot }
           </button>
         ))}
       </div>
-      <p className="mt-1.5 text-2xs leading-4 text-pl-dim">{ROLE_HINT[node.role]}.{node.role === "helper" && !snap.rolesEnabled ? " Эксперимент «Роли» выключен — пока работает как «Авто»." : ""}</p>
+      <p className="mt-1.5 text-2xs leading-4 text-pl-dim">{ROLE_HINT[node.role]}.{node.role === "helper" && !snap.rolesEnabled ? ` ${t("roles.offAsAuto")}` : ""}</p>
       {node.role === "auto" && node.assigned === "free" && <p className="mt-1 text-2xs leading-4 text-pl-gold">Сейчас модели хватает остальных устройств — нода свободна.</p>}
     </div>
   );
@@ -445,7 +445,7 @@ function RebenchButton({ node }: { node: ClusterNode }) {
   );
 }
 
-/** Settings block «Роли · Эксперимент»: switch, helper model, helper status per node. */
+/** Settings block «Роли»: switch, helper model, helper status per node. */
 function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
   const { pushToast, setView } = useCluster();
   const known = snap.helperModels.some((m) => m.id === snap.helperModel);
@@ -459,17 +459,14 @@ function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
   return (
     <div className="panel">
       <div className="panel-head">
-        <span className="flex shrink-0 items-center gap-1.5"><FlaskConical size={12} className="text-pl-violet" /> Роли · Эксперимент</span>
-        <span className="min-w-0 truncate pl-3 font-mono normal-case tracking-normal text-pl-dim">{snap.rolesEnabled ? `помощников: ${snap.helpers.length} · готово: ${ready}` : "выключено"}</span>
+        <span className="flex shrink-0 items-center gap-1.5"><FlaskConical size={12} className="text-pl-violet" /> {t("roles.title")}</span>
+        <span className="min-w-0 truncate pl-3 font-mono normal-case tracking-normal text-pl-dim">{snap.rolesEnabled ? t("roles.stats").replace("{n}", String(snap.helpers.length)).replace("{r}", String(ready)) : t("roles.off")}</span>
       </div>
       <div className="grid grid-cols-1 gap-px bg-pl-line text-xs lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-3 bg-pl-bg1 p-3">
           <Toggle on={snap.rolesEnabled} set={(v) => setRolesEnabled(v).catch((e) => pushToast("error", String(e)))}
-            label="Роль «Помощник»" sub="свободная нода запускает свою маленькую модель рядом с основной" />
-          <p className="text-2xs leading-4 text-pl-dim">
-            Помощник придумывает названия чатов, делает «Сводку» переписки и отвечает в «Параллельном тесте» — основная модель при этом не отвлекается.
-            Модель один раз скачивается на ПК и передаётся на ноды по кабелю или по Wi-Fi. Нужна Argus Node 0.3.2.
-          </p>
+            label={t("roles.toggle")} sub={t("roles.toggleSub")} />
+          <p className="text-2xs leading-4 text-pl-dim">{t("roles.desc")}</p>
           {snap.rolesEnabled && (
             <div className="space-y-1.5">
               <div className="text-pl-text">Модель Помощника</div>
@@ -492,7 +489,7 @@ function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
         </div>
         <div className="bg-pl-bg1">
           {!snap.rolesEnabled ? (
-            <div className="p-3 text-2xs leading-5 text-pl-dim">Включите эксперимент, затем выберите ноде роль «Помощник» в таблице или в инспекторе. Остальные роли — «Авто», «Часть модели», «Свободна» — работают всегда.</div>
+            <div className="p-3 text-2xs leading-5 text-pl-dim">{t("roles.offHint")}</div>
           ) : snap.helpers.length === 0 ? (
             <div className="p-3 text-2xs leading-5 text-pl-dim">Пока ни одной ноды с ролью «Помощник». Выберите её в столбце «Роль» — лучше для устройства, которое модели и так не нужно (помечено «Свободна»).</div>
           ) : (
