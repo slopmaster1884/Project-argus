@@ -12,6 +12,7 @@
 # Usage:  bash argus-node-linux.sh            run in the foreground (Ctrl+C stops everything)
 #         bash argus-node-linux.sh --systemd  install + start a systemd --user service (autostart)
 #         bash argus-node-linux.sh --uninstall-systemd
+#         bash argus-node-linux.sh --open-firewall   open TCP port for Argus in ufw/firewalld (asks sudo)
 # Env:    ARGUS_PORT=50052 ARGUS_NODE_NAME="Pi 5" ARGUS_THREADS=4 ARGUS_CPU=1 (force CPU build on x64)
 #         ARGUS_RPC_BIN=/path/to/rpc-server (skip download)  ARGUS_BEACON_TARGET=192.168.1.10 (unicast
 #         beacon to the PC when broadcast is filtered)  ARGUS_NODE_DIR=~/.local/share/argus-node
@@ -69,6 +70,12 @@ if [ "${1:-}" = "--uninstall-systemd" ]; then
   rm -f "$UNIT"; systemctl --user daemon-reload || true
   log "сервис удалён"; exit 0
 fi
+if [ "${1:-}" = "--open-firewall" ]; then
+  if command -v ufw >/dev/null; then sudo ufw allow "${PORT}/tcp"
+  elif command -v firewall-cmd >/dev/null; then sudo firewall-cmd --permanent --add-port="${PORT}/tcp" && sudo firewall-cmd --reload
+  else log "ufw/firewalld не найдены — открывать нечего"; fi
+  exit 0
+fi
 
 # ------------------------------------------------------------------ pick / download rpc-server
 fetch() { # url dest
@@ -90,11 +97,21 @@ from_release() { # asset-suffix variant
   BIN="$out/ggml-rpc-server"; VARIANT="$2"
 }
 
+# Vulkan loader present? Works on Debian/Ubuntu, Fedora, Arch, openSUSE (not only the Debian lib path).
+has_vulkan() {
+  command -v vulkaninfo >/dev/null && vulkaninfo --summary >/dev/null 2>&1 && return 0
+  command -v ldconfig >/dev/null && ldconfig -p 2>/dev/null | grep -q 'libvulkan\.so\.1' && return 0
+  /sbin/ldconfig -p 2>/dev/null | grep -q 'libvulkan\.so\.1' && return 0
+  local f; for f in /usr/lib/x86_64-linux-gnu/libvulkan.so.1 /usr/lib64/libvulkan.so.1 /usr/lib/libvulkan.so.1; do
+    [ -e "$f" ] && return 0; done
+  return 1
+}
+
 BIN="${ARGUS_RPC_BIN:-}"; VARIANT="${ARGUS_VARIANT:-custom}"
 if [ -z "$BIN" ]; then
   case "$(uname -m)" in
     x86_64|amd64)
-      if [ "${ARGUS_CPU:-0}" != "1" ] && { command -v vulkaninfo >/dev/null && vulkaninfo --summary >/dev/null 2>&1 || [ -e /usr/lib/x86_64-linux-gnu/libvulkan.so.1 ]; }; then
+      if [ "${ARGUS_CPU:-0}" != "1" ] && has_vulkan; then
         from_release ubuntu-vulkan-x64 x64-vulkan
       else
         from_release ubuntu-x64 x64-cpu
@@ -177,6 +194,24 @@ trap cleanup EXIT
 if command -v python3 >/dev/null; then beacon_python & BEACON_PID=$!
 elif command -v socat >/dev/null; then beacon_socat & BEACON_PID=$!
 else log "нет python3 и socat — маяк выключен; добавьте ноду в Argus вручную: <IP>:${PORT}"; fi
+
+# ------------------------------------------------------------------ firewall self-check (issue #3)
+# Symptom when blocked: node appears in "Найдено в сети" (UDP beacon goes OUT fine), but after "Добавить"
+# it goes OFFLINE, because the PC cannot open TCP ${PORT} on this machine.
+firewall_check() {
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    if ! ufw status 2>/dev/null | grep -Eq "^${PORT}(/tcp)?[[:space:]]+ALLOW"; then
+      log "⚠ включён файрвол ufw и порт ${PORT}/tcp закрыт — Argus увидит ноду, но не сможет подключиться."
+      log "   Откройте его одной командой:  sudo ufw allow ${PORT}/tcp"
+    fi
+  elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
+    if ! firewall-cmd --list-ports 2>/dev/null | grep -qw "${PORT}/tcp"; then
+      log "⚠ включён firewalld и порт ${PORT}/tcp закрыт — Argus увидит ноду, но не сможет подключиться."
+      log "   Откройте его:  sudo firewall-cmd --permanent --add-port=${PORT}/tcp && sudo firewall-cmd --reload"
+    fi
+  fi
+}
+firewall_check || true
 
 IPS="$(hostname -I 2>/dev/null || true)"
 log "нода «${NAME}» · ${VARIANT} · ${THREADS} потоков · порт ${PORT} · IP: ${IPS:-?}"
