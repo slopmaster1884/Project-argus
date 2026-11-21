@@ -1,0 +1,176 @@
+# «Argus Node» Raspberry Pi image: official Raspberry Pi OS Lite (64-bit) + the Argus node as a systemd service.
+# Separate from build.yml on purpose: a failure here can never block the desktop/APK release.
+#
+# How: download the official image listed in Raspberry Pi Imager's OS list, verify it, loop-mount it and customise it
+# in a chroot on a NATIVE arm64 runner (ubuntu-24.04-arm, free for public repositories) — no qemu emulation.
+# The work is in scripts/pi-image/build-image.sh (also runnable by hand: sudo scripts/pi-image/build-image.sh …).
+#
+# Outputs (artifact "argus-node-pi-arm64"): argus-node-pi-arm64.img.xz + .img.xz.sha256, BUILD-INFO.txt, and when the
+# build is for a release, argus-node-pi-arm64.rpi-imager-manifest (opens in Raspberry Pi Imager WITH OS customisation:
+# Wi-Fi, user, SSH — Imager 2.x disables customisation for local "Use custom" images).
+# Tag push v*: the files are attached to the GitHub Release of that tag. The release itself is created by build.yml
+# (only when all its jobs pass), so this workflow WAITS for it (up to 2 h) instead of creating one.
+# Manual run with `release_tag`: attaches to an existing release (or draft, e.g. one made by publish-prebuilt).
+name: pi-image
+on:
+  workflow_dispatch:
+    inputs:
+      base_image_url:
+        description: "Raspberry Pi OS Lite arm64 .img.xz URL (empty = the current one from Raspberry Pi Imager's list)"
+        required: false
+        default: ""
+      release_tag:
+        description: "Attach the image to this existing release tag, e.g. v0.4.0 (empty = artifact only)"
+        required: false
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-image-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+env:
+  IMG: argus-node-pi-arm64
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Release tag (if any)
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          tag=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then tag="${GITHUB_REF_NAME}"; fi
+          if [ -n "${INPUT_TAG:-}" ]; then tag="$INPUT_TAG"; fi
+          case "$tag" in ""|v[0-9A-Za-z]*) ;; *) echo "::error::release_tag must look like v0.4.0, got '$tag'"; exit 1 ;; esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release tag: ${tag:-<none, artifact only>}"
+
+      - name: Host tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xz-utils util-linux e2fsprogs file
+          uname -a; df -h / /tmp; nproc; free -h
+
+      - name: Resolve base image (Raspberry Pi Imager OS list)
+        id: base
+        env:
+          BASE_URL: ${{ inputs.base_image_url }}
+        run: |
+          set -euo pipefail
+          python3 scripts/pi-image/imager-manifest.py base --url "${BASE_URL:-}" --out base.json | tee -a "$GITHUB_OUTPUT"
+          cat base.json
+
+      - name: Download + verify base image
+        env:
+          URL: ${{ steps.base.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 10 -o base.img.xz "$URL"
+          # the official .sha256 sits next to every Raspberry Pi OS image
+          if curl -fsSL --retry 3 -o base.img.xz.sha256 "$URL.sha256"; then
+            want="$(awk '{print $1}' base.img.xz.sha256)"
+            got="$(sha256sum base.img.xz | awk '{print $1}')"
+            [ "$want" = "$got" ] || { echo "::error::base image sha256 $got != $want ($URL.sha256)"; exit 1; }
+            echo "download sha256 OK: $got"
+          else
+            echo "::warning::no $URL.sha256 — download not verified (the unpacked image is still checked when Imager's list knows it)"
+          fi
+          ls -l base.img.xz
+
+      - name: Build image (loop mount + arm64 chroot)
+        env:
+          EXTRACT_SHA: ${{ steps.base.outputs.extract_sha256 }}
+          BASE_NAME: ${{ steps.base.outputs.name }}
+          BASE_URL: ${{ steps.base.outputs.url }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          info="$(printf 'repo: %s\ncommit: %s\nref: %s\nbase url: %s\nrun: %s/%s/actions/runs/%s' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF_NAME" "$BASE_URL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          sudo env ARGUS_BASE_EXTRACT_SHA256="$EXTRACT_SHA" ARGUS_BUILD_INFO="$info" \
+            bash scripts/pi-image/build-image.sh base.img.xz "out/$IMG.img"
+          sudo chown "$(id -u):$(id -g)" "out/$IMG.img"
+          rm -f base.img.xz
+          { printf '%s\n' "$info"; echo "base: $BASE_NAME"; } > out/BUILD-INFO.txt
+
+      - name: Compress + checksums
+        id: pack
+        run: |
+          set -euo pipefail
+          cd out
+          echo "extract_size=$(stat -c %s "$IMG.img")" >> "$GITHUB_OUTPUT"
+          echo "extract_sha256=$(sha256sum "$IMG.img" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          xz -T0 -6 -v "$IMG.img"
+          sha256sum "$IMG.img.xz" > "$IMG.img.xz.sha256"
+          sha256sum -c "$IMG.img.xz.sha256"
+          ls -l
+
+      - name: Raspberry Pi Imager manifest (release builds)
+        if: steps.tag.outputs.tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          EXTRACT_SIZE: ${{ steps.pack.outputs.extract_size }}
+          EXTRACT_SHA: ${{ steps.pack.outputs.extract_sha256 }}
+        run: |
+          set -euo pipefail
+          python3 scripts/pi-image/imager-manifest.py manifest --base base.json --image "out/$IMG.img.xz" \
+            --extract-size "$EXTRACT_SIZE" --extract-sha256 "$EXTRACT_SHA" \
+            --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$IMG.img.xz" \
+            --out "out/$IMG.rpi-imager-manifest"
+          cat "out/$IMG.rpi-imager-manifest"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: argus-node-pi-arm64
+          if-no-files-found: error
+          compression-level: 0   # already xz
+          path: |
+            out/*.img.xz
+            out/*.img.xz.sha256
+            out/*.rpi-imager-manifest
+            out/BUILD-INFO.txt
+
+  # Attach to the release of the tag. build.yml creates that release (only when all of its jobs succeed), so wait for it.
+  release:
+    needs: image
+    if: needs.image.outputs.tag != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: argus-node-pi-arm64
+          path: dist
+      - name: Wait for the release, then upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd dist
+          ls -l
+          for i in $(seq 1 120); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then break; fi
+            [ "$i" = 120 ] && { echo "::error::release $TAG did not appear within 2 h (build.yml failed?) — take the files from the artifact"; exit 1; }
+            echo "waiting for release $TAG ($i/120)…"; sleep 60
+          done
+          files=("$IMG.img.xz" "$IMG.img.xz.sha256")
+          [ -f "$IMG.rpi-imager-manifest" ] && files+=("$IMG.rpi-imager-manifest")
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          echo "attached to $TAG: ${files[*]}"

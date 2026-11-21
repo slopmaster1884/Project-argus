@@ -1,3 +1,5 @@
 # Windows scripts keep their exact bytes (CRLF for cmd.exe, UTF-8 BOM for Windows PowerShell 5.1)
 scripts/*.cmd -text
 scripts/*.ps1 -text
+# Raspberry Pi image boot-partition files are opened in Windows Notepad: keep CRLF
+scripts/pi-image/bootfs/* -text

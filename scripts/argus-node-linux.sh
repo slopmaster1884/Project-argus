@@ -21,6 +21,7 @@
 #         bash argus-node-linux.sh --reset-token     forget the secured-mode token (every PC has to pair again)
 # Env:    ARGUS_PORT=50052 ARGUS_NODE_NAME="Pi 5" ARGUS_THREADS=4 ARGUS_CPU=1 (force CPU build on x64)
 #         ARGUS_SECURE=1 (PIN + token auth gateway)  ARGUS_INTERNAL_PORT=50072 (rpc-server port behind the gateway)
+#         ARGUS_PIN_PERSIST=1 (keep the PIN across restarts; rotates after 5 wrong tries — used by the Pi image)
 #         ARGUS_RPC_BIN=/path/to/rpc-server (skip download)  ARGUS_BEACON_TARGET=192.168.1.10 (unicast
 #         beacon to the PC when broadcast is filtered)  ARGUS_NODE_DIR=~/.local/share/argus-node
 set -euo pipefail
@@ -211,6 +212,7 @@ TOKEN_FILE = os.environ["ARGUS_TOKEN_FILE"]
 PIN_FILE = os.environ.get("ARGUS_PIN_FILE", "")
 BIND = os.environ.get("ARGUS_BIND", "0.0.0.0")
 TRUST_LOOPBACK = os.environ.get("ARGUS_TRUST_LOOPBACK", "1") == "1"
+PIN_PERSIST = os.environ.get("ARGUS_PIN_PERSIST", "0") == "1"
 
 P = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
 Q = (P - 1) // 2
@@ -251,6 +253,21 @@ def new_pin():
             with open(PIN_FILE, "w") as f: f.write(pin + "\n")
         except OSError: pass
         finally: os.umask(old)
+    show_pin()
+
+def load_pin():
+    # ARGUS_PIN_PERSIST=1 (Raspberry Pi image): keep the PIN from $ARGUS_PIN_FILE across restarts, so a headless user
+    # can read it from the SD card and boot again. It still rotates after MAX_FAILS wrong attempts.
+    if not (PIN_PERSIST and PIN_FILE): return False
+    try: pin = open(PIN_FILE).read().strip()
+    except OSError: return False
+    if len(pin) != 6 or not pin.isdigit(): return False
+    state["pin"], state["fails"] = pin, 0
+    show_pin()
+    return True
+
+def show_pin():
+    pin = state["pin"]
     log("=" * 44)
     log("  PIN для сопряжения с Argus:  %s %s" % (pin[:3], pin[3:]))
     log("  (Argus → «Найдено в сети» → «Добавить» → PIN)")
@@ -348,7 +365,8 @@ def main():
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind((BIND, PORT)); srv.listen(16)
     log("защищённый режим: шлюз %s:%d → rpc-server %s:%s" % (BIND, PORT, UP_HOST, UP_PORT))
-    with lock: new_pin()
+    with lock:
+        if not load_pin(): new_pin()
     while True:
         try:
             conn, addr = srv.accept()

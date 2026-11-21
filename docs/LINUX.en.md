@@ -1,6 +1,6 @@
 # Argus on Linux: step by step, for people who have never opened a terminal
 
-[Русская версия](LINUX.md) · A second Windows PC as a node: [PC-NODE.en.md](PC-NODE.en.md)
+[Русская версия](LINUX.md) · A second Windows PC as a node: [PC-NODE.en.md](PC-NODE.en.md) · Raspberry Pi without a terminal (ready image): [RASPBERRY-PI.en.md](RASPBERRY-PI.en.md)
 
 > Everything that starts with `$` is typed into the **Terminal** (without the `$` itself).
 > Open a terminal: **Ctrl + Alt + T** (Ubuntu, Mint, Pop!_OS) or find "Terminal" in the app menu.
