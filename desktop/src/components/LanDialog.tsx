@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Loader2, Wifi, X } from "lucide-react";
 import { useCluster } from "../store/cluster";
 import { addLanNode, testLanNode } from "../lib/api";
-import { Copy } from "lucide-react";
+import { Copy, Stethoscope } from "lucide-react";
+import { useT } from "../lib/i18n";
 
 const CMDS: { os: string; cmd: string }[] = [
   { os: "Linux / Pi (авто, с маяком)", cmd: "bash scripts/argus-node-linux.sh" },
@@ -13,6 +14,8 @@ const CMDS: { os: string; cmd: string }[] = [
 /** "Добавить ноду по IP": host:port of a machine running llama.cpp rpc-server (b12008). */
 export default function LanDialog() {
   const setOpen = useCluster((s) => s.setLanDialog);
+  const setNetDiag = useCluster((s) => s.setNetDiag);
+  const t = useT();
   const [addr, setAddr] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<"test" | "add" | null>(null);
@@ -50,7 +53,8 @@ export default function LanDialog() {
             </label>
           </div>
           <div className="font-mono text-2xs text-pl-dim">порт по умолчанию 50052 · будет: {normalized || "—"}</div>
-          {msg && <div className={`border-l-2 p-2 font-mono text-2xs ${msg.ok ? "border-pl-green bg-pl-green/10 text-pl-green" : "border-pl-red bg-pl-red/10 text-pl-red"}`}>{msg.text}</div>}
+          {msg && <div className={`border-l-2 p-2 font-mono text-2xs ${msg.ok ? "border-pl-green bg-pl-green/10 text-pl-green" : "border-pl-red bg-pl-red/10 text-pl-red"}`}>{msg.text}
+            {!msg.ok && <button className="btn ml-2 h-6 font-sans" onClick={() => setNetDiag({ address: normalized })}><Stethoscope size={11} /> {t("nd.button")}</button>}</div>}
 
           <div className="border border-pl-line bg-pl-bg0 p-3 text-xs leading-5 text-pl-mute">
             <div className="label mb-1">Как запустить ноду на Pi / ноутбуке</div>
@@ -68,6 +72,7 @@ export default function LanDialog() {
         </div>
         <div className="flex justify-end gap-2 border-t border-pl-line bg-pl-bg2 px-3 py-2">
           <button className="btn" onClick={() => setOpen(false)}>Отмена</button>
+          <button className="btn mr-auto" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address: normalized })}><Stethoscope size={12} /> {t("nd.button")}</button>
           <button className="btn" disabled={!addr.trim() || !!busy} onClick={test}>{busy === "test" && <Loader2 size={12} className="animate-spin" />} Проверить</button>
           <button className="btn-primary" disabled={!addr.trim() || !!busy} onClick={add}>{busy === "add" && <Loader2 size={12} className="animate-spin" />} Добавить</button>
         </div>

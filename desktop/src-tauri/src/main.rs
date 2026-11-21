@@ -7,6 +7,7 @@ mod cluster;
 mod gpu;
 mod helper;
 mod lan;
+mod netdiag;
 mod llama;
 mod settings;
 mod split;
@@ -92,6 +93,7 @@ fn main() {
             lan::set_auto_add,
             lan::remove_lan_node,
             lan::test_lan_node,
+            netdiag::diagnose_node,
             lan::set_node_weight,
             lan::set_node_enabled,
             lan::set_fast_start,

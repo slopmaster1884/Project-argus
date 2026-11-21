@@ -49,6 +49,8 @@ interface State {
   snapshot: ClusterSnapshot | null;
   wizardOpen: boolean;
   lanDialog: boolean;
+  /** «Проверить связь» modal: address (ip[:port]) prefilled, null = closed */
+  netDiag: { address: string; name?: string } | null;
   tourOpen: boolean;
   conversations: Conversation[];
   activeId: string;
@@ -86,6 +88,7 @@ interface State {
   setSnapshot: (s: ClusterSnapshot) => void;
   setWizard: (o: boolean) => void;
   setLanDialog: (o: boolean) => void;
+  setNetDiag: (t: { address: string; name?: string } | null) => void;
   setTour: (o: boolean) => void;
   setRun: (r: ModelRunState) => void;
   // conversations
@@ -115,6 +118,7 @@ export const useCluster = create<State>((set, get) => {
     snapshot: null,
     wizardOpen: false,
     lanDialog: false,
+    netDiag: null,
     tourOpen: localStorage.getItem("argus.tourDone") !== "1",
     conversations: initialConvs,
     activeId: initialActive,
@@ -163,6 +167,7 @@ export const useCluster = create<State>((set, get) => {
     setSnapshot: (snapshot) => set({ snapshot }),
     setWizard: (wizardOpen) => set({ wizardOpen }),
     setLanDialog: (lanDialog) => set({ lanDialog }),
+    setNetDiag: (netDiag) => set({ netDiag }),
     setTour: (tourOpen) => { if (!tourOpen) localStorage.setItem("argus.tourDone", "1"); set({ tourOpen }); },
     // a new load starts its download readout from zero (old values would show a stale 100%)
     setRun: (run) => set((s) => (run.status === "loading" && s.run.status !== "loading" ? { run, dlBytes: 0 } : { run })),

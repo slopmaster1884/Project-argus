@@ -1,6 +1,6 @@
 // Thin bridge to the Rust side. Falls back to mock data when opened in a plain browser (npm run dev).
 import type {
-  ClusterNode, ClusterSnapshot, DiscoveredNode, DraftStatus, EngineView, HelperDelta, HelperReply, HelperView, ModelEntry, NodeRole, SplitEntry, SplitPlan,
+  ClusterNode, ClusterSnapshot, DiagReport, DiagStep, DiagVerdict, DiscoveredNode, DraftStatus, EngineView, HelperDelta, HelperReply, HelperView, ModelEntry, NodeRole, SplitEntry, SplitPlan,
   UpdateProgress, UpdateStatus,
 } from "./types";
 
@@ -246,6 +246,9 @@ export const removeLanNode = (id: string) =>
   isTauri ? tauriInvoke<void>("remove_lan_node", { id }) : (mock.lan = mock.lan.filter((n) => n.id !== id), Promise.resolve());
 export const testLanNode = (address: string) =>
   isTauri ? tauriInvoke<string>("test_lan_node", { address }) : Promise.resolve("rpc v8.0.0 · 1 устр. · 5.8 / 7.6 GB свободно (демо)");
+/** «Проверить связь»: subnet → beacon → TCP → HELLO, then a verdict with fix hints (netdiag.rs, ≤ ~6 s). */
+export const diagnoseNode = (ip: string, port = 50052) =>
+  isTauri ? tauriInvoke<DiagReport>("diagnose_node", { ip, port }) : mockDiagnose(ip, port);
 export const setNodeWeight = (id: string, weight: number) =>
   isTauri ? tauriInvoke<void>("set_node_weight", { id, weight }) : (mock.weights[id] = weight, Promise.resolve());
 export const setNodeEnabled = (id: string, enabled: boolean) =>
@@ -457,6 +460,33 @@ export async function chatWithTools(messages: ApiMessage[], tools: unknown[], si
 }
 
 // ---------------------------------------------------------------- browser mocks
+
+/** mock «Проверить связь»: the demo Raspberry Pi (.30) is issue #3 (beacon OK, ufw drops TCP), the Pixel (.77) is fine,
+ *  *.99 = rpc-server not running, another /24 = different subnet, anything else = AP isolation. */
+function mockDiagnose(ip: string, port: number): Promise<DiagReport> {
+  const local = "192.168.1.10";
+  const same = ip.split(".").slice(0, 3).join(".") === "192.168.1";
+  const last = ip.split(".").pop();
+  const verdict: DiagVerdict = !/^\d+\.\d+\.\d+\.\d+$/.test(ip) ? "unknown" : !same ? "different_subnet"
+    : last === "30" ? "firewall_likely" : last === "77" ? "ok" : last === "99" ? "rpc_not_running" : "ap_isolation_likely";
+  const beacon = verdict === "firewall_likely" || verdict === "ok" || verdict === "rpc_not_running";
+  const tcp = verdict === "ok" ? "ok" : verdict === "rpc_not_running" ? "refused" : "timeout";
+  const steps: DiagStep[] = [
+    { id: "subnet", ok: same, skipped: false, ms: 0, code: same ? "same" : "different", arg: local, detail: `PC ${local} → node ${ip}` },
+    { id: "beacon", ok: beacon, skipped: false, ms: 0, code: beacon ? "fresh" : "notSeen", arg: beacon ? "1" : null, detail: "" },
+    { id: "tcp", ok: tcp === "ok", skipped: false, ms: tcp === "timeout" ? 3000 : 4, code: tcp,
+      arg: null, detail: tcp === "refused" ? "Connection refused (os error 111)" : tcp === "timeout" ? "no answer in 3 s" : "" },
+    { id: "hello", ok: tcp === "ok", skipped: tcp !== "ok", ms: tcp === "ok" ? 6 : 0, code: tcp === "ok" ? "ok" : "skipped", arg: tcp === "ok" ? "v8.0.0" : null, detail: "" },
+  ];
+  const hints: Record<DiagVerdict, DiagReport["hints"]> = {
+    ok: [], firewall_likely: ["linuxScript", "linuxUfw", "linuxFirewalld", "windowsFirewall"], rpc_not_running: ["restartNode", "checkPort"],
+    different_subnet: ["sameWifi", "guestNetwork", "checkIp"], ap_isolation_likely: ["apIsolation", "guestNetwork", "deviceOn", "pcFirewall"],
+    version_mismatch: ["updateNode"], rpc_busy: ["busy"], unreachable: ["deviceOn", "checkIp", "sameWifi"],
+    unknown: ["linuxScript", "windowsFirewall", "apIsolation", "restartNode"],
+  };
+  const report: DiagReport = { ip, port, localIp: local, steps, verdict, hints: hints[verdict], totalMs: steps.reduce((a, s) => a + s.ms, 0) };
+  return new Promise((r) => setTimeout(() => r(report), 1200));
+}
 
 const mock = {
   found: [
