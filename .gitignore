@@ -8,3 +8,4 @@ desktop/src-tauri/resources/*.exe
 desktop/src-tauri/resources/*.apk
 *.apk
 *.jks
+__pycache__/

@@ -1,0 +1,42 @@
+# Argus Node image: the Wi-Fi node itself (llama.cpp rpc-server + UDP beacon), started at boot.
+# Settings: /boot/firmware/argus.conf (see that file). Logs: journalctl -u argus-node -f
+[Unit]
+Description=Argus Wi-Fi node (llama.cpp rpc-server + beacon)
+Documentation=https://github.com/slopmaster1884/Project-argus/blob/main/docs/RASPBERRY-PI.md
+Wants=network-online.target
+After=network-online.target argus-firstboot.service
+
+[Service]
+Type=simple
+User=argus
+Group=argus
+StateDirectory=argus-node
+StateDirectoryMode=0750
+Environment=ARGUS_NODE_DIR=/var/lib/argus-node
+# secured mode: keep the PIN across reboots so a headless user can read it from the SD card (argus-pin.txt) first
+Environment=ARGUS_PIN_PERSIST=1
+# "+" = runs as root: node name, argus-reset-token, stale argus-pin.txt
+ExecStartPre=+/opt/argus-node/argus-node-prestart.sh
+ExecStart=/opt/argus-node/argus-node-service.sh
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+# hardening (the node only needs its state dir and the network)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

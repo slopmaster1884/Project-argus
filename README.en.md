@@ -70,6 +70,8 @@ curl -fsSL https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/s
 
 The installer checks everything, asks about the firewall and autostart, and tells you what to click in Argus. Step by step for beginners: [docs/LINUX.en.md](docs/LINUX.en.md).
 
+**Raspberry Pi without a terminal:** the ready-made «Argus Node» image (roadmap 0.4). Write it to a card with Raspberry Pi Imager, insert, power on, and ~2 minutes later the Pi shows up in "Found on network". Step by step: [docs/RASPBERRY-PI.en.md](docs/RASPBERRY-PI.en.md).
+
 ## Second PC / laptop as a node
 
 A second computer (Windows or Linux) can lend Argus its memory and GPU over your home network. It doesn't need Argus installed.

@@ -1,6 +1,6 @@
 # Argus на Linux: пошагово, для тех, кто открыл терминал впервые
 
-[English version](LINUX.en.md) · Второй Windows-ПК как нода: [PC-NODE.md](PC-NODE.md)
+[English version](LINUX.en.md) · Второй Windows-ПК как нода: [PC-NODE.md](PC-NODE.md) · Raspberry Pi без терминала (готовый образ): [RASPBERRY-PI.md](RASPBERRY-PI.md)
 
 > Всё, что начинается с `$`, вводится в **Терминал** (без самого `$`).
 > Открыть терминал: **Ctrl + Alt + T** (Ubuntu, Mint, Pop!_OS) или найти «Терминал» в меню.
