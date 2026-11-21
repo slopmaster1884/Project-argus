@@ -181,7 +181,7 @@ export async function onHelperStream(cb: (d: HelperDelta) => void): Promise<() =
   return listen<HelperDelta>("helper-stream", (e) => cb(e.payload));
 }
 
-/** Ready helpers of a snapshot (only while the experiment is on). */
+/** Ready helpers of a snapshot (only while «Роли» are on — the default since 0.4). */
 export const readyHelpers = (s: ClusterSnapshot | null): HelperView[] => (s?.rolesEnabled ? s.helpers.filter((h) => h.ready) : []);
 
 /** Removes Qwen3 `<think>…</think>` blocks. */
@@ -305,6 +305,13 @@ export async function runTool(name: string, args: Record<string, unknown>): Prom
       return { text: hits.length ? hits.map((h) => `${h.title} — path: ${h.path}${h.snippet ? `\n  ${h.snippet}` : ""}`).join("\n") : "ничего не найдено" };
     }
     case "wiki_read": return { text: await kiwixRead(String(args.path ?? "")) };
+    case "subtask": {
+      const k = String(args.kind ?? "summarize");
+      const kind: SubtaskKind = k === "translate" || k === "extract" ? k : "summarize";
+      const r = await subtaskRun(kind, String(args.text ?? ""), args.lang ? String(args.lang) : undefined, args.instruction ? String(args.instruction) : undefined);
+      const who = r.nodes.length ? `Помощник: ${r.nodes.join(", ")}` : "главная модель";
+      return { text: `[выполнил: ${who}]\n${r.content}` };
+    }
     default: throw new Error(`неизвестный инструмент: ${name}`);
   }
 }
@@ -522,7 +529,7 @@ const MOCK_HELPER_MODELS = [
 ];
 
 function mockSetRole(id: string, role: NodeRole) {
-  if (role === "helper" && !mock.rolesEnabled) return Promise.reject("Роль «Помощник» доступна, когда включён эксперимент «Роли»");
+  if (role === "helper" && !mock.rolesEnabled) return Promise.reject("Роль «Помощник» доступна, когда включены «Роли» (Кластер)");
   if (role === "auto") delete mock.roles[id]; else mock.roles[id] = role;
   if (role === "helper") mock.helperSince[id] = Date.now();
   return Promise.resolve();
@@ -581,7 +588,7 @@ function mockPlan(needMb: number | null, snap?: { gpus: ClusterNode[]; nodes: Cl
 }
 
 function mockHelperChat(messages: ApiMessage[], o: HelperChatOpts): Promise<HelperReply> {
-  if (!mock.rolesEnabled) return Promise.reject("Эксперимент «Роли» выключен");
+  if (!mock.rolesEnabled) return Promise.reject("Роли выключены (Кластер → «Роли»)");
   const { nodes } = mockNodes();
   const ready = nodes.filter((n) => n.helper?.ready);
   const n = o.node ? ready.find((x) => x.id === o.node) : ready[0];
@@ -722,10 +729,13 @@ export interface NodeRolesView {
   voice: boolean; voiceModel: VoiceModelId; voiceThreads: number; library: boolean;
   models: { id: VoiceModelId; label: string; sizeMb: number }[];
   downloadPct: number | null; downloadError: string | null; modelOnPc: boolean;
-  node: { voice?: NodeRoleReport; library?: NodeRoleReport } | null; note: string;
+  node: { voice?: NodeRoleReport; library?: NodeRoleReport; embeddings?: NodeRoleReport } | null; note: string;
+  /** 0.4 «Поиск» (embeddings for «Знания»); offered only when the node reports it (Argus Node 0.4+) */
+  search?: boolean; searchSupported?: boolean; searchModelOnPc?: boolean; searchDownloadPct?: number | null; searchDownloadError?: string | null;
 }
 const mockRoles: NodeRolesView = {
   voice: false, voiceModel: "base", voiceThreads: 0, library: false, downloadPct: null, downloadError: null, modelOnPc: false, node: null, note: "",
+  search: false, searchSupported: true, searchModelOnPc: true, searchDownloadPct: null, searchDownloadError: null,
   models: [{ id: "tiny", label: "tiny · 75 МБ · самый быстрый", sizeMb: 75 }, { id: "base", label: "base · 142 МБ · баланс", sizeMb: 142 }, { id: "small", label: "small · 466 МБ · точнее, медленнее", sizeMb: 466 }],
 };
 export const nodeRolesGet = (id: string) => (isTauri ? tauriInvoke<NodeRolesView>("node_roles_get", { id }) : Promise.resolve(mockRoles));
@@ -733,6 +743,8 @@ export const nodeRolesGet = (id: string) => (isTauri ? tauriInvoke<NodeRolesView
 export const setNodeVoice = (id: string, enabled: boolean, model?: VoiceModelId, threads?: number) =>
   (isTauri ? tauriInvoke<void>("set_node_voice", { id, enabled, model: model ?? null, threads: threads ?? null }) : Promise.resolve());
 export const setNodeLibrary = (id: string, enabled: boolean) => (isTauri ? tauriInvoke<void>("set_node_library", { id, enabled }) : Promise.resolve());
+export const setNodeSearch = (id: string, enabled: boolean) =>
+  (isTauri ? tauriInvoke<void>("set_node_search", { id, enabled }) : (mockRoles.search = enabled, Promise.resolve()));
 /** invoke a command that may not exist in this build: resolves null instead of throwing */
 export async function invokeOptional<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   if (!isTauri) return null;
@@ -758,15 +770,26 @@ export async function routeTarget(prompt: string, hasAttachments = false): Promi
   return tauriInvoke<_RouteTarget>("route_target", { prompt, hasAttachments });
 }
 
+// ---- 0.4 agent subtasks (helper.rs subtask_run): a ready Помощник node, else the main model ----
+export type SubtaskKind = "summarize" | "translate" | "extract";
+export interface SubtaskReply { content: string; by: "helper" | "main"; nodes: string[] }
+export async function subtaskRun(kind: SubtaskKind, text: string, lang?: string, instruction?: string): Promise<SubtaskReply> {
+  if (isTauri) return tauriInvoke<SubtaskReply>("subtask_run", { kind, text, lang: lang ?? null, instruction: instruction ?? null });
+  return { content: `(демо) ${kind}: ${text.slice(0, 120)}`, by: "main", nodes: [] };
+}
+
 // ---- «Очередь» и «Знания» (queue.rs / rag.rs / kiwix.rs) ----
 export type QueueKind = "translate" | "summarize" | "custom";
 export interface QueueJob {
   id: string; kind: QueueKind; prompt: string; lang: string; inDir: string; outDir: string; startAt: number | null;
   status: "pending" | "running" | "done" | "error"; progress: number; message: string; doneFiles: string[]; totalFiles: number;
   current: string | null; errors: string[]; created: number;
+  /** 0.4: "auto" = a ready Помощник first, the main model as fallback; "main" = main model only ("" = old job = main) */
+  route?: QueueRoute; doneBy?: string[];
 }
+export type QueueRoute = "auto" | "main" | "";
 export interface QueueState { running: boolean; jobs: QueueJob[] }
-export interface NewQueueJob { kind: QueueKind; prompt: string; lang: string; inDir: string; outDir: string; startAt: number | null }
+export interface NewQueueJob { kind: QueueKind; prompt: string; lang: string; inDir: string; outDir: string; startAt: number | null; route?: QueueRoute }
 const noTauri = () => Promise.reject(new Error("Доступно только в приложении"));
 export const queueList = () => (isTauri ? tauriInvoke<QueueState>("queue_list") : Promise.resolve({ running: false, jobs: [] }));
 export const queueAdd = (job: NewQueueJob) => (isTauri ? tauriInvoke<QueueState>("queue_add", { job }) : noTauri());

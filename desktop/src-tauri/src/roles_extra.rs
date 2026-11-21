@@ -1,6 +1,10 @@
-//! Node roles «Голос» (whisper-server) and «Библиотека» (kiwix-serve), Argus Node 0.3.3+ (docs/ROLES.md «Протокол ролей ноды»).
+//! Node roles «Голос» (whisper-server), «Библиотека» (kiwix-serve), Argus Node 0.3.3+, and «Поиск» (llama-server
+//! --embedding :50060, Argus Node 0.4+) — docs/ROLES.md «Протокол ролей ноды».
 //!
-//! The user's choice per node lives in argus-features.json → `nodeRoles` ({id: {voice, voiceModel, voiceThreads, library}}).
+//! The user's choice per node lives in argus-features.json → `nodeRoles` ({id: {voice, voiceModel, voiceThreads, library, search}}).
+//! * Поиск: nomic-embed-text-v1.5 Q8_0 (the model rag.rs runs on the PC, so an index built on a node keeps working on the
+//!   PC fallback) is downloaded once to helpers_dir and sent like the voice model. Offered only to nodes that report an
+//!   `embeddings` entry in their roles map (older nodes simply don't get it). Assigned only with enough free RAM.
 //! voiceThreads (0 = node default) goes to the node as `--ei voice_threads N` (USB) or `"voice":{…,"threads":N}` (Wi-Fi).
 //! * Голос: the ggml whisper model is downloaded once to the PC (helpers_dir, same downloader/progress as «Помощник»),
 //!   served on :50055 `/helper/<file>`; USB nodes get it through `adb reverse`, Wi-Fi nodes through the beacon reply.
@@ -26,6 +30,14 @@ pub const VOICE_MODELS: &[(&str, &str, u64)] = &[
 ];
 pub const DEFAULT_VOICE: &str = "base";
 
+/// «Поиск»: embedding model sent to nodes (same as rag.rs PC_MODEL)
+pub const SEARCH_REPO: &str = "nomic-ai/nomic-embed-text-v1.5-GGUF";
+pub const SEARCH_FILE: &str = "nomic-embed-text-v1.5.Q8_0.gguf";
+/// argus-status / beacon roles key of «Поиск» (nodesvc.rs reads the same key)
+pub const SEARCH_KEY: &str = "embeddings";
+
+const SEARCH_OLD_NODE: &str = "Поиск: нужна Argus Node 0.4 — обновите ноду";
+
 pub fn voice_file(model: &str) -> Option<String> {
     VOICE_MODELS.iter().find(|m| m.0 == model).map(|m| format!("ggml-{}.bin", m.0))
 }
@@ -39,14 +51,21 @@ pub struct NodeRolePref {
     pub library: bool,
     /// whisper-server -t on the phone; 0 = the node decides (its little cores, at least 2)
     pub voice_threads: u32,
+    /// 0.4 «Поиск» (embeddings for RAG)
+    pub search: bool,
 }
 
 pub const MAX_VOICE_THREADS: u32 = 8;
 
-/// (voice, library) the user turned on for this node here (nodesvc.rs probes Wi-Fi nodes by it).
-pub fn wanted(id: &str) -> (bool, bool) {
-    prefs().get(id).map(|p| (p.voice, p.library)).unwrap_or((false, false))
+/// (voice, library, search) the user turned on for this node here (nodesvc.rs probes Wi-Fi nodes by it).
+pub fn wanted(id: &str) -> (bool, bool, bool) {
+    prefs().get(id).map(|p| (p.voice, p.library, p.search)).unwrap_or((false, false, false))
 }
+
+/// the node's roles map has «Поиск» (Argus Node 0.4+)
+pub fn search_supported(roles: &serde_json::Value) -> bool { roles.get(SEARCH_KEY).map(|v| v.is_object()).unwrap_or(false) }
+
+fn add_note(note: &mut String, s: &str) { if !note.is_empty() { note.push_str("; "); } note.push_str(s); }
 
 fn prefs() -> HashMap<String, NodeRolePref> {
     crate::features::get().extra.get(FEATURE_KEY).cloned()
@@ -124,9 +143,14 @@ async fn tick(st: &Arc<AppState>) {
             ready_files.insert(file, std::fs::metadata(path).map(|m| m.len()).unwrap_or(0));
         }
     }
-    // 2. USB nodes: send the assignment
-    let usb: Vec<String> = st.nodes.lock().await.values()
-        .filter(|n| n.transport == Transport::Usb && n.online()).map(|n| n.id.clone()).collect();
+    // «Поиск» model on the PC (size once complete)
+    let search_size: Option<u64> = if all.values().any(|p| p.search) {
+        crate::helper::ensure_pc_model(st, SEARCH_REPO, SEARCH_FILE, None).await.ok()
+            .map(|path| std::fs::metadata(path).map(|m| m.len()).unwrap_or(0))
+    } else { None };
+    // 2. USB nodes: send the assignment (id → free RAM MB)
+    let usb: HashMap<String, u64> = st.nodes.lock().await.values()
+        .filter(|n| n.transport == Transport::Usb && n.online()).map(|n| (n.id.clone(), n.available_mb)).collect();
     // 3. Wi-Fi nodes: the beacon carries the same roles map as `argus-status`; assignments go in the beacon reply
     {
         let disc = st.discovered.lock().await;
@@ -136,11 +160,23 @@ async fn tick(st: &Arc<AppState>) {
             match disc.get(id).filter(|d| d.last_seen.elapsed() < Duration::from_secs(15)) {
                 Some(d) => {
                     let roles = d.roles.clone().unwrap_or(serde_json::Value::Null);
-                    let note = if d.roles.is_none() && (p.voice || p.library) {
+                    let mut note = if d.roles.is_none() && (p.voice || p.library) {
                         "Для ролей «Голос» и «Библиотека» нужна Argus Node 0.3.3 — обновите ноду".to_string()
                     } else if p.voice && voice_file(&p.voice_model).map(|f| !ready_files.contains_key(&f)).unwrap_or(false) {
                         "Голос: модель ещё качается на ПК".to_string()
                     } else { String::new() };
+                    if p.search {
+                        if !search_supported(&roles) { add_note(&mut note, SEARCH_OLD_NODE); }
+                        else if search_size.is_none() { add_note(&mut note, "Поиск: модель ещё качается на ПК"); }
+                        else if let Some(size) = search_size {
+                            let (ss, sm) = role_state(&roles, SEARCH_KEY);
+                            let running = sm == SEARCH_FILE && ACTIVE.contains(&ss.as_str());
+                            let need = crate::route::search_need_mb(size);
+                            if !crate::route::may_assign(running, d.free_mb, need) {
+                                add_note(&mut note, &format!("Поиск: мало свободной памяти на ноде (нужно ≈{need} МБ, свободно {} МБ) — поиск идёт на ПК", d.free_mb));
+                            }
+                        }
+                    }
                     stt.insert(id.clone(), (roles, note));
                 }
                 None => {
@@ -151,10 +187,11 @@ async fn tick(st: &Arc<AppState>) {
         }
     }
     for (id, p) in &all {
-        if !usb.contains(id) { continue; }
+        let Some(&avail_mb) = usb.get(id) else { continue };
         let dump = st.adb.shell(id, &format!("dumpsys activity service {NODE_PKG}/.RpcService")).await.unwrap_or_default();
         let Some(roles) = parse_roles(&dump) else {
-            let note = if p.voice || p.library { "Для ролей «Голос» и «Библиотека» нужна Argus Node 0.3.3 — обновите ноду" } else { "" };
+            let note = if p.voice || p.library { "Для ролей «Голос» и «Библиотека» нужна Argus Node 0.3.3 — обновите ноду" }
+                       else if p.search { SEARCH_OLD_NODE } else { "" };
             status().lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), (serde_json::Value::Null, note.into()));
             continue;
         };
@@ -202,6 +239,35 @@ async fn tick(st: &Arc<AppState>) {
             if let Err(e) = am(st, id, "--es role_stop library").await { note = format!("Библиотека: {e}"); }
             mark(id, "library", "stop");
         }
+
+        // «Поиск» (Argus Node 0.4+): llama-server --embedding on the node
+        let (ss, sm) = role_state(&roles, SEARCH_KEY);
+        if p.search {
+            if !search_supported(&roles) { add_note(&mut note, SEARCH_OLD_NODE); }
+            else { match search_size {
+                None => add_note(&mut note, "Поиск: модель ещё качается на ПК"),
+                Some(size) => {
+                    let running = sm == SEARCH_FILE && ACTIVE.contains(&ss.as_str());
+                    let need = crate::route::search_need_mb(size);
+                    let sig = format!("{SEARCH_FILE}|{size}");
+                    if !crate::route::may_assign(running, avail_mb, need) {
+                        add_note(&mut note, &format!("Поиск: мало свободной памяти на ноде (нужно ≈{need} МБ, свободно {avail_mb} МБ) — поиск идёт на ПК"));
+                    } else if !running && due(id, "search", &sig) {
+                        let port = crate::updater::NODE_UPDATE_PORT;
+                        let rev = st.adb.run(&["-s", id, "reverse", &format!("tcp:{port}"), &format!("tcp:{port}")]).await;
+                        let r = match rev {
+                            Err(e) => Err(format!("adb reverse: {e:#}")),
+                            Ok(_) => am(st, id, &format!("--es role search --es search_model {SEARCH_FILE} --es search_url http://127.0.0.1:{port}/helper/{SEARCH_FILE} --el search_size {size}")).await,
+                        };
+                        mark(id, "search", &sig);
+                        if let Err(e) = r { add_note(&mut note, &format!("Поиск: {e}")); }
+                    }
+                }
+            } }
+        } else if ACTIVE.contains(&ss.as_str()) && due(id, "search", "stop") {
+            if let Err(e) = am(st, id, "--es role_stop search").await { add_note(&mut note, &format!("Поиск: {e}")); }
+            mark(id, "search", "stop");
+        }
         status().lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), (roles, note));
     }
 }
@@ -214,8 +280,9 @@ pub async fn run(st: Arc<AppState>) {
     }
 }
 
-/// Adds `"voice"` / `"library"` to a beacon reply for a Wi-Fi node (only for nodes the user configured here).
-pub fn extend_lan_reply(msg: Vec<u8>, node_id: &str) -> Vec<u8> {
+/// Adds `"voice"` / `"library"` / `"search"` to a beacon reply for a Wi-Fi node (only for nodes the user configured here).
+/// `free_mb` / `roles`: the node's beacon (RAM check for a new «Поиск» assignment; older nodes ignore the key).
+pub fn extend_lan_reply(msg: Vec<u8>, node_id: &str, free_mb: u64, roles: Option<&serde_json::Value>) -> Vec<u8> {
     let Some(p) = prefs().get(node_id).cloned() else { return msg };
     let Ok(mut j) = serde_json::from_slice::<serde_json::Value>(&msg) else { return msg };
     if p.voice {
@@ -230,6 +297,16 @@ pub fn extend_lan_reply(msg: Vec<u8>, node_id: &str) -> Vec<u8> {
         j["voice"] = serde_json::Value::Bool(false);
     }
     j["library"] = if p.library { serde_json::json!({}) } else { serde_json::Value::Bool(false) };
+    if p.search {
+        if let Ok(m) = std::fs::metadata(crate::helper::helpers_dir().join(SEARCH_FILE)) {
+            let running = roles.map(|r| { let (s, f) = role_state(r, SEARCH_KEY); f == SEARCH_FILE && ACTIVE.contains(&s.as_str()) }).unwrap_or(false);
+            if m.len() > 0 && crate::route::may_assign(running, free_mb, crate::route::search_need_mb(m.len())) {
+                j["search"] = serde_json::json!({ "file": SEARCH_FILE, "path": format!("/helper/{SEARCH_FILE}"), "size": m.len() });
+            } // not on the PC yet / not enough RAM: no key = no change
+        }
+    } else {
+        j["search"] = serde_json::Value::Bool(false);
+    }
     j.to_string().into_bytes()
 }
 
@@ -254,6 +331,13 @@ pub struct NodeRolesView {
     /// node report (USB): {voice:{state,pct,model,error}, library:{state,zim,error,import_pct}}; null if unknown
     pub node: serde_json::Value,
     pub note: String,
+    /// 0.4 «Поиск»
+    pub search: bool,
+    /// the node reported a «Поиск» role (Argus Node 0.4+); false = don't offer it
+    pub search_supported: bool,
+    pub search_model_on_pc: bool,
+    pub search_download_pct: Option<u32>,
+    pub search_download_error: Option<String>,
 }
 
 #[tauri::command]
@@ -269,11 +353,24 @@ pub async fn node_roles_get(state: State<'_, Arc<AppState>>, id: String) -> Resu
             if d.running { pct = Some(if d.total > 0 { (d.done * 100 / d.total) as u32 } else { 0 }); }
         }
     }
-    let (node, note) = status().lock().unwrap_or_else(|e| e.into_inner()).get(&id).cloned().unwrap_or((serde_json::Value::Null, String::new()));
+    let (mut node, note) = status().lock().unwrap_or_else(|e| e.into_inner()).get(&id).cloned().unwrap_or((serde_json::Value::Null, String::new()));
+    // Wi-Fi nodes not configured here yet: their beacon still tells what they can do
+    if node.is_null() {
+        if let Some(r) = state.discovered.lock().await.get(&id).and_then(|d| d.roles.clone()) { node = r; }
+    }
+    let search_on_pc = std::fs::metadata(crate::helper::helpers_dir().join(SEARCH_FILE)).map(|m| m.len() > 0).unwrap_or(false);
+    let (mut s_pct, mut s_err) = (None, None);
+    if p.search && !search_on_pc {
+        if let Some(d) = state.helper_dl.lock().await.get(SEARCH_FILE) {
+            s_err = d.error.clone();
+            if d.running { s_pct = Some(if d.total > 0 { (d.done * 100 / d.total) as u32 } else { 0 }); }
+        }
+    }
     Ok(NodeRolesView {
         voice: p.voice, voice_model: model, voice_threads: p.voice_threads.min(MAX_VOICE_THREADS), library: p.library,
         models: VOICE_MODELS.iter().map(|m| VoiceModelView { id: m.0.into(), label: m.1.into(), size_mb: m.2 }).collect(),
-        download_pct: pct, download_error: err, model_on_pc: on_pc, node, note,
+        download_pct: pct, download_error: err, model_on_pc: on_pc, search: p.search, search_supported: search_supported(&node),
+        search_model_on_pc: search_on_pc, search_download_pct: s_pct, search_download_error: s_err, node, note,
     })
 }
 
@@ -305,6 +402,16 @@ pub async fn set_node_library(id: String, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// «Поиск» on/off for a node (0.4). The node must report the role (Argus Node 0.4+) for anything to happen.
+#[tauri::command]
+pub async fn set_node_search(state: State<'_, Arc<AppState>>, id: String, enabled: bool) -> Result<(), String> {
+    save_pref(&id, |p| p.search = enabled);
+    // a failed earlier download should not block a new try
+    if enabled { state.helper_dl.lock().await.retain(|_, d| d.running); }
+    sent().lock().unwrap_or_else(|e| e.into_inner()).remove(&(id, "search"));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,5 +426,11 @@ mod tests {
         assert!(parse_roles("argus-helper state=idle").is_none());
         let old: NodeRolePref = serde_json::from_str(r#"{"voice":true,"voiceModel":"tiny"}"#).unwrap();
         assert_eq!(old.voice_threads, 0);
+        assert!(!old.search);
+        let r4 = parse_roles("argus-status {\"roles\":{\"embeddings\":{\"state\":\"ready\",\"model\":\"nomic-embed-text-v1.5.Q8_0.gguf\"}}}").unwrap();
+        assert!(search_supported(&r4));
+        assert!(!search_supported(&r));
+        assert_eq!(role_state(&r4, SEARCH_KEY).1, SEARCH_FILE);
+        assert!(crate::helper::safe_file(SEARCH_FILE));
     }
 }

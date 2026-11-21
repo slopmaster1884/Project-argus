@@ -32,6 +32,7 @@ export const TOOLS: ToolDef[] = [
   { name: "key_press", dangerous: true, description: "Press a key or combination, e.g. enter, ctrl+s, alt+tab, win+r.", parameters: obj({ keys: str("Key combination joined with +") }, ["keys"]) },
   { name: "search_files", dangerous: false, description: "Search the user's own indexed documents (folder chosen in «Знания») by meaning. Returns the most relevant passages with file paths.", parameters: obj({ query: str("What to look for, in natural language"), k: num("How many passages, default 5") }, ["query"]) },
   { name: "wiki_search", dangerous: false, description: "Search the offline library (Wikipedia and other Kiwix books). Returns article titles with paths for wiki_read.", parameters: obj({ query: str("Search words") }, ["query"]) },
+  { name: "subtask", dangerous: false, description: "Hand a simple sub-task over one piece of text to a helper model (another device of the cluster; falls back to the main model): summarize it, translate it, or extract facts by an instruction. Use it for long file contents or search results instead of reading them yourself. Returns only the result text.", parameters: obj({ kind: { type: "string", enum: ["summarize", "translate", "extract"], description: "What to do" }, text: str("The text to work on (up to 60000 characters)"), lang: str("Output language, e.g. Russian (optional)"), instruction: str("For extract (or a summary focus): what exactly to pull out (optional)") }, ["kind", "text"]) },
   { name: "wiki_read", dangerous: false, description: "Read an article from the offline library by the path returned by wiki_search (text, up to 8000 characters).", parameters: obj({ path: str("Article path, e.g. /content/wikipedia_ru_all/A/Москва") }, ["path"]) },
 ];
 
@@ -40,6 +41,7 @@ export const TOOL_LABEL: Record<string, string> = {
   run_command: "Команда PowerShell", write_file: "Записать файл", open_app: "Открыть приложение",
   mouse_click: "Клик мышью", mouse_move: "Переместить мышь", type_text: "Ввести текст", key_press: "Нажать клавиши",
   search_files: "Поиск по моим файлам", wiki_search: "Поиск в библиотеке", wiki_read: "Статья из библиотеки",
+  subtask: "Подзадача Помощнику",
 };
 
 export const isDangerous = (name: string) => TOOLS.find((t) => t.name === name)?.dangerous ?? true;
@@ -65,6 +67,7 @@ export const AGENT_SYSTEM = (vision: boolean, dangerous: boolean) =>
   (dangerous ? "" : "Only read-only tools are enabled; if the task needs commands, file writes or input control, say that the user must enable dangerous tools. ") +
   (!PLATFORM.screen ? "Screen capture and mouse/keyboard control are not available on this OS. " :
    vision ? "You can see screenshots: take one before clicking, and use pixel coordinates from the latest screenshot. " : "You cannot see images; do not try to control the mouse. ") +
+  "For long texts (file contents, search results) use the subtask tool to summarize, translate or extract facts piece by piece — it runs on a helper device when one is free. " +
   "Every action is shown to the user, who may decline it.";
 
 export type Decision = "allow" | "allow-all" | "deny";

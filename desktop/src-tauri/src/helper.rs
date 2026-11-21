@@ -1,9 +1,13 @@
-//! Experiment «Роли» (0.3.2): the «Помощник» role.
+//! The «Помощник» role (0.3.2 experiment «Роли»; a normal feature since 0.4, settings `roles_enabled`, on by default).
 //!
 //! A free node runs its OWN llama-server (static aarch64 build shipped in the node APK as libllama_server.so)
 //! with a small model, next to the main model. Argus uses it in parallel: chat titles, «Сводка», «Параллельный тест».
 //!
-//! Flow (one `tick` every 3 s, only while the experiment is on):
+//! 0.4: a node gets the model only when it has enough free RAM (route::helper_need_mb); otherwise the helper stays
+//! «not ready» and every user of helpers falls back to the main model on its own. `run_small_task` = task type → role →
+//! node with fallback (agent subtasks, queue.rs uses the same pieces).
+//!
+//! Flow (one `tick` every 3 s, while «Роли» is on):
 //!  1. the helper model is downloaded ONCE on the PC (Hugging Face → <models>/helpers/<file>), with progress;
 //!  2. the PC serves it on :50055 (`/helper/<file>`, updater.rs) — USB nodes reach it through `adb reverse tcp:50055`,
 //!     Wi-Fi nodes through the PC's LAN address;
@@ -11,7 +15,7 @@
 //!     the node app downloads the file into its private storage, starts llama-server on 127.0.0.1:50062, and reports
 //!     progress in `dumpsys activity service …/.RpcService` (line `argus-helper …`). PC side: `adb forward tcp:5016N tcp:50062`.
 //!     Wi-Fi: the assignment rides in the unicast reply to the node's beacon (lan.rs), status comes back in the beacon;
-//!  4. ready = GET /health → 200. Role removed / experiment off ⇒ the helper is stopped (USB: `--ez helper_stop true`,
+//!  4. ready = GET /health → 200. Role removed / «Роли» off ⇒ the helper is stopped (USB: `--ez helper_stop true`,
 //!     Wi-Fi: `"helper": false` in the reply).
 //! Nothing here installs or updates an app: the user picked the role and the model, the node keeps asking about app updates.
 use crate::split::Role;
@@ -204,7 +208,15 @@ pub async fn lan_assignment(st: &AppState, node_id: &str) -> serde_json::Value {
     if !is_helper { return serde_json::Value::Bool(false); }
     let Some((_, file, _, _)) = resolve(&model) else { return serde_json::Value::Bool(false) };
     match std::fs::metadata(helpers_dir().join(&file)) {
-        Ok(m) if m.len() > 0 => serde_json::json!({ "file": file, "path": format!("/helper/{file}"), "size": m.len(), "port": HELPER_PORT }),
+        Ok(m) if m.len() > 0 => {
+            // 0.4: a new assignment only when the node has the RAM for it (a running helper keeps its model)
+            let (free_mb, running) = st.discovered.lock().await.get(node_id)
+                .map(|d| (d.free_mb, d.helper.as_ref().map(|h| h.model.as_deref() == Some(file.as_str())
+                    && matches!(h.state.as_str(), "downloading" | "starting" | "loading" | "ready")).unwrap_or(false)))
+                .unwrap_or((0, false));
+            if !crate::route::may_assign(running, free_mb, crate::route::helper_need_mb(m.len())) { return serde_json::Value::Null; }
+            serde_json::json!({ "file": file, "path": format!("/helper/{file}"), "size": m.len(), "port": HELPER_PORT })
+        }
         _ => serde_json::Value::Null, // not on the PC yet: keep whatever runs, nothing new
     }
 }
@@ -216,7 +228,7 @@ pub async fn tick(app: &AppHandle, st: &Arc<AppState>) {
         nodes.iter().filter(|n| s.roles.get(&n.id).map(|r| r == "helper").unwrap_or(false)).collect()
     } else { vec![] };
 
-    // role removed / experiment off / node gone → stop
+    // role removed / «Роли» off / node gone → stop
     let stale: Vec<(String, Option<u16>)> = {
         let rt = st.helpers.lock().await;
         rt.iter().filter(|(id, _)| !wanted.iter().any(|n| &n.id == *id)).map(|(id, r)| (id.clone(), r.local_port)).collect()
@@ -251,9 +263,9 @@ pub async fn tick(app: &AppHandle, st: &Arc<AppState>) {
             set(st, &n.id, "prepare", "Нода не в сети", None, &label).await;
             continue;
         }
-        if n.transport == Transport::Lan { lan_status(st, n, &label).await; continue; }
+        if n.transport == Transport::Lan { lan_status(st, n, &label, crate::route::helper_need_mb(pc_size)).await; continue; }
         if n.transport != Transport::Usb { continue; }
-        usb_tick(app, st, &n.id, &file, pc_size, &label).await;
+        usb_tick(app, st, &n.id, &file, pc_size, &label, n.available_mb).await;
     }
 }
 
@@ -264,7 +276,7 @@ async fn set(st: &AppState, id: &str, state: &str, detail: &str, pct: Option<u32
     if !model.is_empty() { r.model = model.into(); }
 }
 
-async fn usb_tick(app: &AppHandle, st: &Arc<AppState>, serial: &str, file: &str, size: u64, label: &str) {
+async fn usb_tick(app: &AppHandle, st: &Arc<AppState>, serial: &str, file: &str, size: u64, label: &str, avail_mb: u64) {
     let port = {
         let mut rt = st.helpers.lock().await;
         let p = rt.get(serial).and_then(|r| r.local_port).unwrap_or_else(|| {
@@ -333,6 +345,12 @@ async fn usb_tick(app: &AppHandle, st: &Arc<AppState>, serial: &str, file: &str,
         }
         _ => {}
     }
+    // 0.4 safety: the node does not run this model now — give it only when its free RAM is enough
+    let need = crate::route::helper_need_mb(size);
+    if !crate::route::fits_ram(avail_mb, need) {
+        set(st, serial, "error", &format!("Мало свободной памяти на ноде: нужно ≈{need} МБ, свободно {avail_mb} МБ — Помощник не запущен, задачи идут на главную модель"), None, label).await;
+        return;
+    }
     // (re)send the command: new model, or nothing happened for 60 s
     if last_sig == sig && last_cmd.map(|t| t.elapsed() < Duration::from_secs(60)).unwrap_or(false) {
         set(st, serial, "prepare", "Жду ответа ноды", None, label).await;
@@ -361,7 +379,7 @@ async fn usb_tick(app: &AppHandle, st: &Arc<AppState>, serial: &str, file: &str,
 }
 
 /// Wi-Fi helper: assignment goes out with the beacon reply; here we only read the beacon status + /health.
-async fn lan_status(st: &AppState, n: &crate::state::Node, label: &str) {
+async fn lan_status(st: &AppState, n: &crate::state::Node, label: &str, need_mb: u64) {
     let d = st.discovered.lock().await.get(&n.id).cloned();
     let Some(d) = d else {
         set(st, &n.id, "error", "Помощник по сети работает только с нодами в «Wi-Fi режиме» Argus Node 0.3.2", None, label).await;
@@ -371,6 +389,11 @@ async fn lan_status(st: &AppState, n: &crate::state::Node, label: &str) {
     if let Some(ok) = health(&base).await {
         { let mut rt = st.helpers.lock().await; rt.entry(n.id.clone()).or_default().url = Some(base); }
         if ok { set(st, &n.id, "ready", "Готов", None, label).await; } else { set(st, &n.id, "loading", "Загружает модель в память", None, label).await; }
+        return;
+    }
+    let running = d.helper.as_ref().map(|h| matches!(h.state.as_str(), "downloading" | "starting" | "loading" | "ready")).unwrap_or(false);
+    if !crate::route::may_assign(running, d.free_mb, need_mb) {
+        set(st, &n.id, "error", &format!("Мало свободной памяти на ноде: нужно ≈{need_mb} МБ, свободно {} МБ — Помощник не запущен, задачи идут на главную модель", d.free_mb), None, label).await;
         return;
     }
     match d.helper.as_ref() {
@@ -419,7 +442,7 @@ pub fn strip_think(s: &str) -> String {
 pub async fn helper_chat(app: AppHandle, state: State<'_, Arc<AppState>>, node: Option<String>, messages: serde_json::Value,
                          max_tokens: Option<u32>, stream_id: Option<String>, temperature: Option<f32>) -> Result<HelperReply, String> {
     let st = state.inner().clone();
-    if !st.settings.lock().await.roles_enabled { return Err("Эксперимент «Роли» выключен".into()); }
+    if !st.settings.lock().await.roles_enabled { return Err("Роли выключены (Кластер → «Роли»)".into()); }
     let (id, base, model) = {
         let mut rt = st.helpers.lock().await;
         let pick = match &node {
@@ -489,6 +512,99 @@ async fn chat(app: &AppHandle, base: &str, messages: serde_json::Value, max_toke
     Ok((content, tps, tokens, t0.elapsed().as_millis() as u64))
 }
 
+// ---------------------------------------------------------------- 0.4: task routing (task type → role → node, fallback)
+
+/// Ready «Помощник» nodes as routing candidates (USB first, then Wi-Fi; empty while «Роли» are off).
+pub async fn candidates(st: &AppState) -> Vec<crate::route::Cand> {
+    if !st.settings.lock().await.roles_enabled { return vec![]; }
+    let rt = st.helpers.lock().await;
+    let mut v: Vec<crate::route::Cand> = rt.iter().map(|(id, r)| crate::route::Cand {
+        node: id.clone(), base: r.url.clone().unwrap_or_default(), ready: r.state == "ready" && r.url.is_some(), busy: r.busy,
+    }).collect();
+    v.sort_by_key(|c| (c.node.starts_with("lan:"), c.node.clone()));
+    v
+}
+
+/// One non-streaming answer from a specific helper node (busy counter kept). Err = the node failed / disappeared.
+pub async fn complete_on(app: &AppHandle, st: &AppState, c: &crate::route::Cand, sys: &str, user: &str, max_tokens: u32) -> Result<String, String> {
+    if let Some(r) = st.helpers.lock().await.get_mut(&c.node) { r.busy += 1; }
+    let msgs = serde_json::json!([{"role": "system", "content": sys}, {"role": "user", "content": user}]);
+    let r = chat(app, &c.base, msgs, Some(max_tokens), None, Some(0.3)).await;
+    if let Some(h) = st.helpers.lock().await.get_mut(&c.node) { h.busy = h.busy.saturating_sub(1); }
+    let (content, _, _, _) = r.map_err(|e| format!("{e:#}"))?;
+    let out = strip_think(&content);
+    if out.is_empty() { return Err("пустой ответ".into()); }
+    Ok(out)
+}
+
+/// Display name of a node id.
+pub async fn node_name(st: &AppState, id: &str) -> String {
+    st.nodes.lock().await.get(id).map(|n| n.name.clone()).unwrap_or_else(|| id.to_string())
+}
+
+/// Runs one small LLM task where the routing table says: a ready helper node, else the main model on the PC.
+/// A node that fails is skipped and the next one / the main model takes over silently.
+/// Returns (text, "helper" | "main", node name or "").
+pub async fn run_small_task(app: &AppHandle, st: &AppState, task: crate::route::Task, sys: &str, user: &str) -> Result<(String, String, String), String> {
+    let mut exclude: Vec<String> = Vec::new();
+    loop {
+        let cands = candidates(st).await;
+        let main_up = crate::queue::llama_up().await;
+        match crate::route::backend("auto", task, &cands, &exclude, main_up) {
+            crate::route::Backend::Node(c) => match complete_on(app, st, &c, sys, user, crate::route::helper_max_tokens(task)).await {
+                Ok(t) => return Ok((t, "helper".into(), node_name(st, &c.node).await)),
+                Err(e) => { log::warn!("helper {} failed, falling back: {e}", c.node); exclude.push(c.node.clone()); }
+            },
+            crate::route::Backend::Main => {
+                let t = crate::queue::complete_main(&reqwest::Client::new(), sys, user).await?;
+                return Ok((t, "main".into(), String::new()));
+            }
+            crate::route::Backend::Wait => return Err("Нет ни готового Помощника, ни запущенной модели — запустите модель во вкладке «Чат»".into()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtaskReply {
+    pub content: String,
+    /// "helper" | "main" (the last chunk's worker when several were used)
+    pub by: String,
+    /// helper node names that did parts of the work
+    pub nodes: Vec<String>,
+}
+
+/// Agent subtask (lib/agent.ts tool `subtask`): summarize / translate / extract one chunk of text.
+/// Long text is cut into helper-sized pieces; each piece goes to a helper when one is ready, else to the main model.
+#[tauri::command]
+pub async fn subtask_run(app: AppHandle, state: State<'_, Arc<AppState>>, kind: String, text: String,
+                         lang: Option<String>, instruction: Option<String>) -> Result<SubtaskReply, String> {
+    let task = crate::route::Task::parse(&kind).filter(|t| matches!(*t, crate::route::Task::Summary | crate::route::Task::Translate | crate::route::Task::AgentSubtask))
+        .ok_or("подзадача: summarize, translate или extract")?;
+    if text.trim().is_empty() { return Err("подзадача: пустой текст".into()); }
+    if text.chars().count() > 60_000 { return Err("подзадача: текст длиннее 60 000 символов — разделите его".into()); }
+    let lang = lang.map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).unwrap_or_else(|| "the language of the text".into());
+    let instr = instruction.unwrap_or_default();
+    let sys = match task {
+        crate::route::Task::Translate => format!("You are a professional translator. Translate the user's text into {lang}. Keep the meaning, formatting and Markdown. Output only the translation."),
+        crate::route::Task::Summary => format!("Summarize the user's text in {lang}: the key points as a short Markdown list. Output only the summary.{}",
+                                               if instr.trim().is_empty() { String::new() } else { format!(" Focus: {}", instr.trim()) }),
+        _ => format!("{}\n\nWork only with the user's text. Answer briefly in {lang}.", if instr.trim().is_empty() { "Extract the key facts from the user's text." } else { instr.trim() }),
+    };
+    let st = state.inner().clone();
+    let on_helper = crate::route::pick(&candidates(&st).await, &[]).is_some();
+    let pieces = crate::textx::chunk(&text, crate::route::chunk_chars(task, on_helper), 0);
+    let (mut parts, mut nodes, mut by) = (Vec::new(), Vec::new(), String::from("main"));
+    for p in &pieces {
+        let (t, who, node) = run_small_task(&app, &st, task, &sys, p).await?;
+        if !node.is_empty() && !nodes.contains(&node) { nodes.push(node); }
+        by = who;
+        parts.push(t);
+    }
+    let sep = if task == crate::route::Task::Translate { "\n\n" } else { "\n\n---\n\n" };
+    Ok(SubtaskReply { content: parts.join(sep), by, nodes })
+}
+
 // ---------------------------------------------------------------- settings commands
 
 #[tauri::command]
@@ -496,7 +612,7 @@ pub async fn set_node_role(state: State<'_, Arc<AppState>>, id: String, role: St
     let r = Role::parse(Some(role.as_str()));
     {
         let mut s = state.settings.lock().await;
-        if r == Role::Helper && !s.roles_enabled { return Err("Роль «Помощник» доступна, когда включён эксперимент «Роли»".into()); }
+        if r == Role::Helper && !s.roles_enabled { return Err("Роль «Помощник» доступна, когда включены «Роли» (Кластер)".into()); }
         if r == Role::Auto { s.roles.remove(&id); } else { s.roles.insert(id, r.as_str().into()); }
     }
     state.save_settings().await;

@@ -1,10 +1,12 @@
-// «Ночная очередь»: пакетные задания над папкой (перевод / пересказ / свой запрос) — по одному, через локальную модель.
+// «Ночная очередь»: пакетные задания над папкой (перевод / пересказ / свой запрос) — по одному.
+// 0.4: маршрут «auto» — куски перевода/пересказа берёт свободный Помощник, при сбое ноды — основная модель (queue.rs, route.rs).
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { ListTodo, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { useCluster } from "../store/cluster";
-import { onQueueUpdate, queueAdd, queueList, queuePause, queueRemove, queueStart, type QueueJob, type QueueKind, type QueueState } from "../lib/api";
+import { onQueueUpdate, queueAdd, queueList, queuePause, queueRemove, queueStart, type QueueJob, type QueueKind, type QueueRoute, type QueueState } from "../lib/api";
 import { toastError } from "../lib/errors";
+import { useT } from "../lib/i18n";
 
 const KINDS: { id: QueueKind; label: string; hint: string }[] = [
   { id: "translate", label: "Перевести", hint: "каждый файл целиком на выбранный язык" },
@@ -16,6 +18,8 @@ const input = "mt-1 h-8 w-full border border-pl-line2 bg-pl-bg0 px-2 text-sm tex
 
 export default function QueueView() {
   const { pushToast } = useCluster();
+  const t = useT();
+  const [route, setRoute] = useState<QueueRoute>("auto");
   const [q, setQ] = useState<QueueState>({ running: false, jobs: [] });
   const [kind, setKind] = useState<QueueKind>("translate");
   const [lang, setLang] = useState("русский");
@@ -38,7 +42,7 @@ export default function QueueView() {
     setBusy(true);
     try {
       const at = startAt ? Math.floor(new Date(startAt).getTime() / 1000) : null;
-      setQ(await queueAdd({ kind, lang, prompt, inDir: inDir.trim(), outDir: outDir.trim(), startAt: at }));
+      setQ(await queueAdd({ kind, lang, prompt, inDir: inDir.trim(), outDir: outDir.trim(), startAt: at, route: kind === "custom" ? "main" : route }));
       pushToast("ok", "Задание добавлено в очередь");
       setInDir(""); setOutDir("");
     } catch (e) { toastError(e); }
@@ -66,6 +70,15 @@ export default function QueueView() {
         <label className="block text-pl-mute">{kind === "translate" ? "На какой язык" : "Язык ответа"}
           <input value={lang} onChange={(e) => setLang(e.target.value)} className={input} />
         </label>
+        {kind !== "custom" && (
+          <label className="block text-pl-mute">{t("q.route")}
+            <select value={route} onChange={(e) => setRoute(e.target.value as QueueRoute)} className={input}>
+              <option value="auto">{t("q.route.auto")}</option>
+              <option value="main">{t("q.route.main")}</option>
+            </select>
+            <span className="mt-1 block text-2xs leading-4 text-pl-dim">{t("q.route.hint")}</span>
+          </label>
+        )}
         <label className="block text-pl-mute">Папка с файлами
           <input value={inDir} onChange={(e) => setInDir(e.target.value)} placeholder="C:\Users\me\Documents\статьи" className={clsx(input, "font-mono")} />
         </label>
@@ -112,6 +125,9 @@ export default function QueueView() {
                 </span>
                 <span>{j.doneFiles.length} / {j.totalFiles || "?"} · {Math.round(j.progress * 100)}%</span>
               </div>
+              {!!j.doneBy?.length && (
+                <div className="mt-1 truncate text-2xs text-pl-dim">{t("q.doneBy").replace("{x}", j.doneBy.map((w) => (w === "главная модель" ? t("q.main") : w)).join(", "))}</div>
+              )}
               {j.errors.length > 0 && (
                 <details className="mt-1 text-2xs text-pl-red"><summary className="cursor-pointer">Не получилось: {j.errors.length}</summary>
                   {j.errors.map((e, i) => <div key={i} className="mt-0.5 break-all">{e}</div>)}</details>

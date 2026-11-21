@@ -112,13 +112,13 @@ async fn tick_lan(st: &Arc<AppState>) -> Vec<String> {
             continue;
         }
         seen.push(id.clone());
-        let (want_voice, want_library) = crate::roles_extra::wanted(&id);
+        let (want_voice, want_library, want_search) = crate::roles_extra::wanted(&id);
         for &(role, name, def_port) in SERVICES {
             let key = (id.clone(), name.to_string());
             let r = roles.and_then(|r| r.get(role)).filter(|v| v.is_object());
             let reported = r.and_then(|v| v["state"].as_str()).map(str::to_string);
             let port = r.and_then(|v| v["port"].as_u64()).and_then(|p| u16::try_from(p).ok()).unwrap_or(def_port);
-            let wanted = match role { "voice" => want_voice, "library" => want_library, _ => false };
+            let wanted = match role { "voice" => want_voice, "library" => want_library, "embeddings" => want_search, _ => false };
             let active = reported.as_deref().map(|s| !inactive(s)).unwrap_or(false);
             // no beacon roles (older node / beacon lost): probe only what the user turned on here
             if !active && !(reported.is_none() && wanted) {

@@ -26,6 +26,7 @@ mod nodesvc;
 mod roles_extra;
 mod tether;
 mod rpcauth;
+mod route;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -111,6 +112,7 @@ fn main() {
             helper::set_roles_enabled,
             helper::set_helper_model,
             helper::retry_helper,
+            helper::subtask_run,
             agent::platform_info,
             agent::agent_run_command,
             agent::agent_read_file,
@@ -130,6 +132,7 @@ fn main() {
             roles_extra::node_roles_get,
             roles_extra::set_node_voice,
             roles_extra::set_node_library,
+            roles_extra::set_node_search,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -84,7 +84,7 @@ pub struct Node {
     pub role: String,
     /// what the current plan does with it: "model" (layers) | "free" | "helper" | "off" (disabled/offline)
     pub assigned: String,
-    /// «Помощник» status (experiment «Роли»)
+    /// «Помощник» status («Роли», on by default since 0.4)
     pub helper: Option<crate::helper::HelperView>,
     /// battery/SoC temperature °C (beacon "temp_c" / USB dumpsys `argus-status {json}`)
     pub temp_c: Option<f32>,
@@ -275,7 +275,7 @@ pub struct ClusterSnapshot {
     /// rough tok/s estimate for the planned split
     pub est_tps: Option<f32>,
     pub fits: bool,
-    /// experiment «Роли»
+    /// «Роли» switch (on by default since 0.4; 0.3.x experiment)
     pub roles_enabled: bool,
     pub helper_model: String,
     pub helper_models: Vec<crate::helper::HelperModelView>,
@@ -574,7 +574,7 @@ impl AppState {
 /// autobench cache key: device + node app version (a new app version measures again)
 pub fn bench_key(id: &str, version: &str) -> String { format!("{id}|{version}") }
 
-/// Role of a node; «Помощник» only counts while the experiment «Роли» is on (else it behaves like «Авто»).
+/// Role of a node; «Помощник» only counts while «Роли» are on (default since 0.4) (else it behaves like «Авто»).
 pub fn role_of(n: &Node, roles_enabled: bool) -> split::Role {
     match split::Role::parse(Some(n.role.as_str())) {
         split::Role::Helper if !roles_enabled => split::Role::Auto,

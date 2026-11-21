@@ -157,7 +157,7 @@ pub fn start_beacon_listener(app: AppHandle, st: Arc<AppState>) {
                         if reply_due(&d.host) {
                             let helper = crate::helper::lan_assignment(&st, &d.id()).await;
                             let msg = host_reply(crate::updater::NODE_UPDATE_PORT, crate::cluster::bundled_code(&st.bundled_node_version), false, Some(helper));
-                            let msg = crate::roles_extra::extend_lan_reply(msg, &d.id());
+                            let msg = crate::roles_extra::extend_lan_reply(msg, &d.id(), d.free_mb, d.roles.as_ref());
                             if let Err(e) = sock.send_to(&msg, src).await { log::debug!("beacon reply {src}: {e}"); }
                         }
                         on_beacon(&app, &st, d).await;
@@ -447,7 +447,7 @@ pub async fn wifi_node_update(state: State<'_, Arc<AppState>>, id: String) -> Re
     if d.src_port == 0 { return Err("адрес ответа ноды неизвестен — подождите пару секунд".into()); }
     let helper = crate::helper::lan_assignment(&state, &id).await;
     let msg = host_reply(crate::updater::NODE_UPDATE_PORT, crate::cluster::bundled_code(&state.bundled_node_version), true, Some(helper));
-    let msg = crate::roles_extra::extend_lan_reply(msg, &id);
+    let msg = crate::roles_extra::extend_lan_reply(msg, &id, d.free_mb, d.roles.as_ref());
     let sock = UdpSocket::bind(("0.0.0.0", 0)).await.map_err(|e| e.to_string())?;
     sock.send_to(&msg, (d.host.as_str(), d.src_port)).await.map_err(|e| e.to_string())?;
     Ok(format!("Запрос отправлен на «{}» — подтвердите обновление на самом устройстве", d.name))

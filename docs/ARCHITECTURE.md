@@ -48,7 +48,15 @@ UI: Palantir Blueprint-style dark ops console (topology graph, object inspector,
 - `StartModelArgs.warmupSystem` = system prompt of the current chat. Right after `/health` turns OK the engine is
   `warming` («Прогрев…»): the prompt is processed once (prompt cache), so the first real answer skips that prefill.
 
-### Experiment «Роли»: the «Помощник» role (`helper.rs`, UI `ParallelTest.tsx`, `lib/helpers.ts`)
+### 0.4: roles are a normal feature, task routing, «Поиск» (docs/ROLES.md / ROLES.en.md)
+- `route.rs`: pure routing rules (task type → role → node, fallback to the PC), RAM thresholds, settings migration; unit-tested.
+- «Помощник» no longer needs the experiment switch (`roles_enabled` on by default, 0.3.x explicit «off» kept via `roles_v04`);
+  a node gets the helper model only with enough free RAM. `queue.rs` (route `auto`/`main`) and `helper::subtask_run`
+  (agent tool `subtask`) send small LLM work to a ready helper and fall back to the main model when it fails or disappears.
+- «Поиск»: `roles_extra.rs` assigns llama-server `--embedding` (:50060) to Argus Node 0.4 nodes that report an
+  `embeddings` role; `rag.rs` uses it and fails over to the next node / the PC embedding server mid-index and mid-search.
+
+### Experiment «Роли» (0.3.2): the «Помощник» role (`helper.rs`, UI `ParallelTest.tsx`, `lib/helpers.ts`)
 - Off by default (`set_roles_enabled`). A node with role `helper` runs its **own** `llama-server` (static aarch64 build
   in the APK as `libllama_server.so`) with a small model next to the main model; it is never part of the split.
 - Models (`set_helper_model`): Qwen3 0.6B Q4_0 (default), Qwen3 1.7B Q4_0, Qwen3 4B Instruct 2507 Q4_0, or a custom
