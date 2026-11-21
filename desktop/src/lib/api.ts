@@ -106,8 +106,9 @@ export const wifiNodeUpdate = (id: string) => (isTauri ? tauriInvoke<string>("wi
 export const rescan = () => (isTauri ? tauriInvoke<void>("rescan") : Promise.resolve());
 export const reconnectNode = (id: string) => (isTauri ? tauriInvoke<void>("reconnect_node", { id }) : Promise.resolve());
 export const restartEngine = () => (isTauri ? tauriInvoke<string>("restart_engine") : Promise.resolve(LLAMA_URL));
-export const addDiscoveredNode = (id: string) =>
-  isTauri ? tauriInvoke<string>("add_discovered_node", { id }) : (mockAddLan(id.replace(/^lan:/, ""), mock.found.find((d) => d.id === id)?.name), Promise.resolve(id));
+/** `pin`: the node's beacon says `auth` (secured RPC) — 6 digits shown on the node. Error "PIN_REQUIRED: …" = ask for it. */
+export const addDiscoveredNode = (id: string, pin?: string) =>
+  isTauri ? tauriInvoke<string>("add_discovered_node", { id, pin: pin ?? null }) : (mockAddLan(id.replace(/^lan:/, ""), mock.found.find((d) => d.id === id)?.name), Promise.resolve(id));
 export const setAutoAdd = (enabled: boolean) => (isTauri ? tauriInvoke<void>("set_auto_add", { enabled }) : (mock.autoAdd = enabled, Promise.resolve()));
 
 export interface PlatformInfo { os: "windows" | "linux" | "macos"; shell: string; screen: boolean }
@@ -240,8 +241,10 @@ const MOCK_TEMP: Record<string, number> = { R52T1234: 36.5, R58N9ABC: 44.2, RZ8R
 export const modelStatus = () => (isTauri ? tauriInvoke<boolean>("model_status") : Promise.resolve(true));
 
 // ---- nodes / settings
-export const addLanNode = (address: string, name?: string) =>
-  isTauri ? tauriInvoke<string>("add_lan_node", { address, name: name ?? null }) : mockAddLan(address, name);
+export const addLanNode = (address: string, name?: string, pin?: string) =>
+  isTauri ? tauriInvoke<string>("add_lan_node", { address, name: name ?? null, pin: pin ?? null }) : mockAddLan(address, name);
+/** backend error asking for the node's PIN (secured RPC) */
+export const isPinRequired = (e: unknown) => String(e).includes("PIN_REQUIRED");
 export const removeLanNode = (id: string) =>
   isTauri ? tauriInvoke<void>("remove_lan_node", { id }) : (mock.lan = mock.lan.filter((n) => n.id !== id), Promise.resolve());
 export const testLanNode = (address: string) =>

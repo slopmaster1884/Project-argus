@@ -25,6 +25,7 @@ mod vision;
 mod nodesvc;
 mod roles_extra;
 mod tether;
+mod rpcauth;
 
 use std::sync::Arc;
 use tauri::Manager;

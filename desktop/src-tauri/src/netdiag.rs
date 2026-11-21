@@ -89,7 +89,7 @@ impl BeaconSeen {
 pub enum Tcp { Ok, Refused, Timeout, Unreachable, Other }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hello { Ok((u8, u8, u8)), Mismatch(Option<(u8, u8, u8)>), Busy, Garbled, Skipped }
+pub enum Hello { Ok((u8, u8, u8)), Mismatch(Option<(u8, u8, u8)>), Busy, Garbled, Skipped, /** PIN-secured gateway (rpcauth) answered */ Secured }
 
 /// home-network address: RFC 1918, link-local (169.254, no DHCP) or loopback (tests / a node on this PC)
 pub fn is_lan(ip: Ipv4Addr) -> bool { ip.is_private() || ip.is_link_local() || ip.is_loopback() }
@@ -147,7 +147,8 @@ pub fn classify_hello(r: Result<(u8, u8, u8), String>, major: u8) -> Hello {
         Ok(v) => Hello::Mismatch(Some(v)),
         Err(e) => {
             let l = e.to_lowercase();
-            if l.contains("hello timeout") { Hello::Busy }
+            if l.contains("secured gateway") { Hello::Secured }
+            else if l.contains("hello timeout") { Hello::Busy }
             // pre-v3 servers answer HELLO with 3 bytes, very old ones drop the connection on the unknown command
             else if l.contains("reply size") || l.contains("early eof") || l.contains("unexpected eof") || l.contains("reset") { Hello::Mismatch(None) }
             else { Hello::Garbled }
@@ -162,6 +163,7 @@ pub fn verdict(subnet: Subnet, beacon: BeaconSeen, tcp: Tcp, hello: Hello, major
             Hello::Ok(v) if v.0 == major => Verdict::Ok,
             Hello::Ok(_) | Hello::Mismatch(_) => Verdict::VersionMismatch,
             Hello::Busy => Verdict::RpcBusy,
+            Hello::Secured => Verdict::Ok, // secured node: reachable, auth is checked on add/pair
             Hello::Skipped => Verdict::Ok, // the running model holds the connection: TCP alive is all we can know
             Hello::Garbled => Verdict::Unknown,
         },
@@ -244,6 +246,7 @@ pub fn hello_step(h: Hello, ms: u32, detail: String, tcp_ok: bool, attached: boo
         Hello::Mismatch(x) => (false, false, "mismatch", x.map(v)),
         Hello::Busy => (false, false, "busy", None),
         Hello::Garbled => (false, false, "garbled", None),
+        Hello::Secured => (true, false, "secured", None),
         Hello::Skipped if attached && tcp_ok => (true, true, "inModel", None),
         Hello::Skipped => (false, true, "skipped", None),
     };
@@ -350,6 +353,8 @@ mod tests {
         assert_eq!(v(Subnet::Same, Fresh(1), Tcp::Ok, Hello::Mismatch(None)), Verdict::VersionMismatch);
         assert_eq!(v(Subnet::Same, Fresh(1), Tcp::Ok, Hello::Ok((7, 1, 0))), Verdict::VersionMismatch);
         assert_eq!(v(Subnet::Same, Fresh(1), Tcp::Ok, Hello::Busy), Verdict::RpcBusy);
+        assert_eq!(v(Subnet::Same, Fresh(1), Tcp::Ok, Hello::Secured), Verdict::Ok);
+        assert_eq!(classify_hello(Err("secured gateway (PIN mode)".into()), 8), Hello::Secured);
         assert_eq!(v(Subnet::Same, Fresh(1), Tcp::Ok, Hello::Garbled), Verdict::Unknown);
         assert_eq!(v(Subnet::Same, NotSeen, Tcp::Other, Hello::Skipped), Verdict::Unknown);
     }

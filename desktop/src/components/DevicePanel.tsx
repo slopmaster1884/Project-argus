@@ -5,8 +5,10 @@ import clsx from "clsx";
 import { useCluster } from "../store/cluster";
 import {
   addDiscoveredNode, exportBenchResults, planSplit, rebenchNode, reconnectNode, rescan, removeLanNode, restartEngine, retryHelper, setAutoAdd, setHelperModel, setNodeEnabled,
-  setNodeRole, setNodeWeight, setRolesEnabled, setUsbTether, updateUsbNode, wifiNodeUpdate,
+  setNodeRole, setNodeWeight, setRolesEnabled, setUsbTether, updateUsbNode, wifiNodeUpdate, isPinRequired,
 } from "../lib/api";
+import { t } from "../lib/i18n";
+import PinDialog from "./PinDialog";
 import { Toggle } from "./ChatView";
 import EngineBanner from "./EngineBanner";
 import NodeExtraRoles from "./NodeExtraRoles";
@@ -31,7 +33,10 @@ export const stageTag: Record<NodeStage, [string, string]> = {
 };
 
 export const TransportBadge = ({ n }: { n: ClusterNode }) =>
-  n.transport === "lan" ? <span className="tag border border-pl-cyan/60 text-pl-cyan">{n.beacon ? "Wi-Fi" : "LAN"}</span>
+  n.transport === "lan" ? <>
+    <span className="tag border border-pl-cyan/60 text-pl-cyan">{n.beacon ? "Wi-Fi" : "LAN"}</span>
+    {n.secure && <span className="tag ml-1 whitespace-nowrap border border-pl-green/60 text-pl-green" title={t("sec.badgeHint")}>{t("sec.badge")}</span>}
+  </>
   : n.transport === "usb" && n.link === "tether" && n.stage === "connected"
     ? <span className="tag whitespace-nowrap border border-pl-green/60 text-pl-green" title="Связь через USB-модем телефона (сеть по кабелю), без adb-проброса">USB-модем</span>
   : n.transport === "usb" ? <span className="tag border border-pl-line2 text-pl-mute" title={n.tether && n.tetherHint ? n.tetherHint : undefined}>USB</span>
@@ -582,12 +587,20 @@ function ReconnectButton({ node }: { node: ClusterNode }) {
 function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
   const pushToast = useCluster((s) => s.pushToast);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pinFor, setPinFor] = useState<DiscoveredNode | null>(null);
   const list = snap.discovered ?? [];
   async function add(d: DiscoveredNode) {
+    if (d.auth) { setPinFor(d); return; }   // secured node: PIN first
     setBusy(d.id);
-    try { await addDiscoveredNode(d.id); pushToast("ok", `Нода «${d.name}» добавлена`); } catch (e) { pushToast("error", String(e)); }
+    try { await addDiscoveredNode(d.id); pushToast("ok", `Нода «${d.name}» добавлена`); }
+    catch (e) { if (isPinRequired(e)) setPinFor(d); else pushToast("error", String(e)); }
     setBusy(null);
   }
+  async function pair(d: DiscoveredNode, pin: string) {
+    await addDiscoveredNode(d.id, pin);
+    pushToast("ok", t("sec.added").replace("{name}", d.name));
+  }
+  const securedNode = (id: string) => snap.nodes.find((n) => n.id === id)?.secure ?? false;
   return (
     <div className="panel">
       <div className="panel-head">
@@ -612,7 +625,10 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
           <tbody className="whitespace-nowrap font-mono">
             {list.map((d) => (
               <tr key={d.id} className="border-b border-pl-line last:border-0 odd:bg-pl-bg1 even:bg-[#20252c]">
-                <td className="max-w-[200px] truncate px-3 py-2 font-sans text-pl-text" title={d.name}>{d.name}</td>
+                <td className="max-w-[200px] truncate px-3 py-2 font-sans text-pl-text" title={d.name}>
+                  {d.name}
+                  {d.auth && <span title={t("sec.foundHint")} className="ml-1.5 tag border border-pl-green/50 text-pl-green">{t("sec.found")}</span>}
+                </td>
                 <td className="px-3 py-2 text-pl-mute">{d.endpoint}</td>
                 <td className="px-3 py-2 text-pl-mute">{d.ramMb ? `${gb(d.ramMb)} / ${gb(d.freeMb)} GB` : "—"}</td>
                 <td className="px-3 py-2 text-pl-mute">{d.variant ?? "—"}</td>
@@ -622,7 +638,9 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
                 </td>
                 <td className={clsx("px-3 py-2", d.ageSec > 10 ? "text-pl-orange" : "text-pl-green")}>{d.ageSec > 10 ? `${d.ageSec} с назад` : "● сейчас"}</td>
                 <td className="px-3 py-2 text-right">
-                  {d.added ? (snap.nodes.some((n) => n.id === d.id && needsDiag(n)) ? <DiagAddressButton address={d.endpoint} name={d.name} /> : <span className="text-2xs text-pl-dim">добавлена</span>) : (
+                  {d.added && d.auth && !securedNode(d.id) ? (
+                    <button className="btn h-6" onClick={() => setPinFor(d)}><Plus size={11} /> {t("sec.repair")}</button>
+                  ) : d.added ? (snap.nodes.some((n) => n.id === d.id && needsDiag(n)) ? <DiagAddressButton address={d.endpoint} name={d.name} /> : <span className="text-2xs text-pl-dim">добавлена</span>) : (
                     <button className="btn h-6" disabled={busy === d.id} onClick={() => add(d)}>
                       {busy === d.id ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />} Добавить
                     </button>
@@ -636,8 +654,10 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
       )}
       <div className="flex items-start gap-2 border-t border-pl-line bg-pl-orange/5 px-3 py-2 text-2xs leading-4 text-pl-orange">
         <ShieldAlert size={12} className="mt-0.5 shrink-0" />
-        <span>У RPC по сети нет пароля и шифрования: любой в этой сети может подключиться к ноде. Только закрытая домашняя сеть — не публичный Wi-Fi, порт 50052 не открывать в интернет. USB быстрее и стабильнее Wi-Fi.</span>
+        <span>У RPC по сети нет пароля и шифрования: любой в этой сети может подключиться к ноде. Только закрытая домашняя сеть — не публичный Wi-Fi, порт 50052 не открывать в интернет. USB быстрее и стабильнее Wi-Fi.
+          {" "}Защищённый режим (PIN) закрывает ноду от чужих устройств в сети, но трафик по-прежнему не шифруется — см. docs/SECURITY.md.</span>
       </div>
+      {pinFor && <PinDialog name={pinFor.name} onSubmit={(pin) => pair(pinFor, pin)} onClose={() => setPinFor(null)} />}
     </div>
   );
 }

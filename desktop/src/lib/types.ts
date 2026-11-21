@@ -46,6 +46,8 @@ export interface ClusterNode {
   link?: NodeLink;           // how the PC reaches it right now
   tether?: boolean;          // «USB-модем» option is on (USB nodes)
   tetherHint?: string | null; // why USB-модем isn't used right now
+  // ---- secured RPC (rpcauth.rs, docs/SECURITY.md)
+  secure?: boolean;          // PIN-paired LAN node, reached only with its token («🔒 защищено»)
 }
 
 /** usb = adb forward, tether = Android USB tethering («USB-модем»), wifi = network */
@@ -69,6 +71,7 @@ export interface DiscoveredNode {
   id: string; endpoint: string; name: string; ramMb: number; freeMb: number;
   variant: string | null; ageSec: number; added: boolean;
   appVersion: string | null; appVc: number | null; outdated: boolean;
+  auth?: boolean;             // beacon "auth":1 — secured node, «Добавить» asks for its PIN (rpcauth.rs)
 }
 
 export type EngineStatus = "idle" | "loading" | "ready" | "broken";

@@ -364,9 +364,26 @@ pub fn gguf_info(path: &Path) -> Option<crate::split::ModelInfo> {
     })
 }
 
-/// `--rpc` endpoints of a plan, in order.
+/// `--rpc` endpoints of a plan, in order. Secured nodes (PIN-paired) go through their local authenticated
+/// forwarder (`snap.rpc_map`, rpcauth.rs); everything else is passed as is.
 pub fn plan_endpoints(plan: &crate::split::Plan, snap: &crate::state::ClusterSnapshot) -> Vec<String> {
-    plan.rpc_ids.iter().filter_map(|id| snap.nodes.iter().find(|n| &n.id == id).and_then(|n| n.endpoint.clone())).collect()
+    plan.rpc_ids.iter().filter_map(|id| snap.nodes.iter().find(|n| &n.id == id).and_then(|n| n.endpoint.clone()))
+        .map(|ep| snap.rpc_map.get(&ep).cloned().unwrap_or(ep)).collect()
+}
+
+/// node endpoint -> local forwarder for every PIN-paired LAN node (forwarders live for the app lifetime).
+pub async fn secure_rpc_map(st: &AppState, snap: &crate::state::ClusterSnapshot) -> Result<std::collections::HashMap<String, String>, String> {
+    let tokens: Vec<(String, crate::rpcauth::Token)> = {
+        let s = st.settings.lock().await;
+        snap.nodes.iter().filter(|n| n.secure)
+            .filter_map(|n| Some((n.endpoint.clone()?, s.rpc_token(&n.id)?))).collect()
+    };
+    let mut m = std::collections::HashMap::new();
+    for (ep, tok) in tokens {
+        let local = crate::rpcauth::forwarder(&ep, &tok).await.map_err(|e| format!("защищённая нода {ep}: локальный порт: {e:#}"))?;
+        m.insert(ep, local);
+    }
+    Ok(m)
 }
 
 /// Builds the llama-server argument list (pure; unit-tested).
@@ -588,7 +605,7 @@ pub async fn startup(app: &AppHandle, st: &Arc<AppState>) {
         e.adopted_pid = Some(pid);
         e.ever_healthy = true;
         e.started = Some(Instant::now());
-        e.nodes = rpc_from_cmdline(&cmd).into_iter().map(|ep| EngineNode { id: String::new(), name: ep.clone(), endpoint: ep }).collect();
+        e.nodes = rpc_from_cmdline(&cmd).into_iter().map(|ep| crate::rpcauth::real_endpoint(&ep).unwrap_or(ep)).map(|ep| EngineNode { id: String::new(), name: ep.clone(), endpoint: ep }).collect();
         log::info!("adopted running llama-server pid {pid} ({} rpc nodes)", e.nodes.len());
         drop(e);
         let _ = app.emit("llama-log", format!("[argus] подключились к уже запущенному движку (pid {pid})"));
@@ -600,7 +617,9 @@ pub async fn startup(app: &AppHandle, st: &Arc<AppState>) {
 
 /// App exit: stop the engine unless the user chose to keep the model loaded.
 pub async fn shutdown(st: &AppState) {
-    let keep = st.settings.lock().await.keep_loaded;
+    // an engine using secured nodes talks to them through this process's forwarders: it cannot outlive Argus
+    // (its connections die with them), so it is stopped even with «держать модель загруженной» (docs/SECURITY.md)
+    let keep = st.settings.lock().await.keep_loaded && !crate::rpcauth::any_forwarder();
     let running_ours = st.engine.lock().await.is_some() || st.engine_state.lock().await.adopted_pid.is_some();
     if !keep && running_ours { kill_engine(st).await; }
 }
@@ -625,6 +644,7 @@ async fn launch(app: &AppHandle, st: &Arc<AppState>, mut args: StartModelArgs, a
     let draft = prepare_draft(app, st, &args, info.as_ref()).await;
     let mut snap = st.snapshot().await;
     snap.draft = draft;
+    snap.rpc_map = secure_rpc_map(st, &snap).await?;
     let plan = launch_plan(&args, &snap);
     let rpc = plan_endpoints(&plan, &snap).join(",");
     let sig = serde_json::to_string(&(&args.hf_repo, &args.hf_file, &args.model_path, &args.ctx, &args.lan,
