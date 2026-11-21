@@ -201,6 +201,23 @@ aarch64: our static musl builds from `android/app/src/main/jniLibs/arm64-v8a` (i
 `--systemd` installs a user service. Verified in the sandbox (aarch64): static i8mm build started, beacon received on
 :50053, HELLO answered `v8.0.1`, rpc-server auto-restarted after `kill`.
 
+`scripts/install.sh` — one-command installer (`curl … | bash`): checks arch/distro/deps (prints the apt/dnf/pacman/zypper
+command, asks before sudo; `ARGUS_YES=1`), downloads `argus-node-linux.sh` from `ARGUS_REF` (default `main`) into
+`~/.local/share/argus-node/src/` (plus the aarch64 static builds into `~/.local/share/argus-node/`), offers
+`--open-firewall`, then `--systemd` (extra env such as `ARGUS_BEACON_TARGET` goes into a drop-in
+`argus-node.service.d/installer.conf`) or `--foreground`; `--uninstall`. RU/EN by `LANG` / `ARGUS_LANG`.
+
+### Windows PC as a Wi-Fi node — `scripts/argus-node-windows.ps1` (+ `argus-node-windows.cmd`)
+Downloads `llama-b12008-bin-win-{cuda-12.4|cuda-13.4|vulkan|cpu}-{x64|arm64}.zip` (CUDA also needs
+`cudart-llama-bin-win-cuda-<v>-<arch>.zip`) into `%LOCALAPPDATA%\ArgusNode`; auto pick: `nvidia-smi` driver ≥ 528 → CUDA
+(≥ 580 → 13.4, else 12.4), `System32\vulkan-1.dll` → Vulkan, else CPU (`-Backend` overrides). Runs `ggml-rpc-server.exe
+-H 0.0.0.0 -p 50052 -t <cores> -c` (restarted if it dies) and sends the same beacon via `UdpClient` to 255.255.255.255 plus
+each interface's subnet broadcast (Windows sends limited broadcast on one interface only) and `-BeaconTarget`.
+Firewall: inbound TCP rule "Argus Node (rpc-server)", profiles Private+Domain, added through a UAC-elevated child
+PowerShell (the script itself runs unelevated). `-Install` = Scheduled Task at logon (`-Background`: hidden, log in
+`node.log`), falls back to the Startup folder if the task can't be registered; `-Uninstall` removes task, rule, files.
+The `.ps1` is UTF-8 with BOM (Windows PowerShell 5.1 reads BOM-less files as ANSI); `.gitattributes` keeps the bytes.
+
 ## What's new in 0.2 (desktop)
 | | |
 |---|---|

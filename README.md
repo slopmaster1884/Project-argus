@@ -9,7 +9,7 @@
 ![engine](https://img.shields.io/badge/движок-llama.cpp-ff4081)
 ![license](https://img.shields.io/badge/бесплатно-open_source-00e676)
 
-[Скачать](../../releases) · [Как запустить](#как-запустить) · [Что нового](#что-нового-в-034) · [Поддержать](SUPPORT.md) · [English](README.en.md)
+[Скачать](../../releases) · [Как запустить](#как-запустить) · [Linux](#linux) · [Второй ПК](#второй-пк--ноутбук-как-нода) · [Что нового](#что-нового-в-034) · [Поддержать](SUPPORT.md) · [English](README.en.md)
 
 **Проект делает один человек на GTX 960. Если зашло — [закинь на железо](SUPPORT.md) ❤️**
 
@@ -120,9 +120,34 @@ flowchart LR
 
 Windows может показать предупреждение SmartScreen, потому что установщик пока не подписан: «Подробнее» → «Выполнить в любом случае».
 
-Без кабеля: в Argus Node включи «Wi-Fi режим», телефон появится в разделе «Найдено в сети». На Linux-ПК или Raspberry Pi запусти `bash scripts/argus-node-linux.sh`.
+Без кабеля: в Argus Node включи «Wi-Fi режим», телефон появится в разделе «Найдено в сети».
 
-Для Linux нужен драйвер Vulkan, а для USB-нод правила udev: `sudo apt install android-sdk-platform-tools-common`.
+## Linux
+
+Argus работает и на Linux (AppImage / .deb): нужен драйвер Vulkan, а для телефонов по USB — правила udev (`sudo apt install android-sdk-platform-tools-common`).
+
+Сделать Linux-ПК, ноутбук или Raspberry Pi **нодой-помощником** — одна команда в терминале:
+
+```
+curl -fsSL https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/scripts/install.sh | bash
+```
+
+Установщик сам всё проверит, спросит про файрвол и автозапуск и покажет, что нажать в Argus. Пошагово для новичков: [docs/LINUX.md](docs/LINUX.md).
+
+## Второй ПК / ноутбук как нода
+
+Второй компьютер (Windows или Linux) может отдавать Argus свою память и видеокарту по домашней сети. Argus на нём ставить не нужно.
+
+- **Windows:** Win + R → `powershell` → вставь и нажми Enter:
+  ```
+  irm https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/scripts/argus-node-windows.ps1 -OutFile $env:TEMP\argus-node.ps1; powershell -ExecutionPolicy Bypass -File $env:TEMP\argus-node.ps1
+  ```
+  Или скачай проект и дважды щёлкни `scripts\argus-node-windows.cmd`.
+- **Linux:** команда из раздела выше.
+
+Потом на главном ПК: **Cluster → «Найдено в сети» → «Добавить»** (или «Добавить ноду по IP»). Подробно и что делать, если не видно: [docs/PC-NODE.md](docs/PC-NODE.md).
+
+⚠ У ноды нет пароля: только домашняя сеть, порт 50052 в интернет не открывай.
 
 ## Какая модель влезет
 
