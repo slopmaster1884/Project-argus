@@ -69,7 +69,7 @@ The installer isn't signed yet, so SmartScreen may complain: "More info" → "Ru
 
 llama.cpp's `rpc-server` has no authentication. In Wi-Fi mode and in USB tethering mode the phone listens on port 50052 on all interfaces, so anything on the same Wi-Fi can connect to it. In plain USB mode (adb forward) only the PC can reach it.
 
-So: use Wi-Fi and tethering modes only on your own home network, and never expose ports 50052, 50053, 50061, 50063 or 50080 to the internet. Binding the port to the cable only, or adding a token, is on the roadmap.
+So: use Wi-Fi and tethering modes only on your own home network, and never expose ports 50052, 50053, 50061, 50063 or 50080 to the internet. Optional secured mode (“Защищённый режим” in Argus Node, `ARGUS_SECURE=1` for the Linux node) lets only PCs paired with the node’s PIN connect. It adds no encryption — see [docs/SECURITY.en.md](docs/SECURITY.en.md) for the threat model.
 
 ## Is it fast?
 

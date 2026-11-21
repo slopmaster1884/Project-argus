@@ -21,6 +21,8 @@ use tokio::{net::TcpStream, time::timeout};
 
 pub const HINT_ENABLE: &str = "Включи на телефоне: Настройки → Подключения → Мобильная точка доступа → USB-модем";
 const HINT_OLD_APP: &str = "Для USB-модема нужна Argus Node 0.3.3 или новее — обнови приложение на телефоне";
+/// secured RPC on the phone: its network port is the auth gateway; the adb forward (loopback) stays unauthenticated
+const HINT_SECURE: &str = "На телефоне включён защищённый режим (PIN): USB-модем не используется, работает обычный USB";
 const HINT_SWITCHING: &str = "Переключаю телефон на USB-модем…";
 const HINT_WAIT_ENGINE: &str = "Перейду на USB-модем, когда модель перезапустится или остановится";
 const HINT_UNREACHABLE: &str = "USB-модем не отвечает. Включи на телефоне: Настройки → Подключения → Мобильная точка доступа → USB-модем";
@@ -35,6 +37,8 @@ pub struct NetStatus {
     pub wifi_ip: Option<String>,
     /// rpc.mode: "usb" (rpc-server on 127.0.0.1) | "wifi" (0.0.0.0)
     pub mode: Option<String>,
+    /// rpc.auth: the app's secured RPC mode is active (gateway on the network port)
+    pub auth: bool,
 }
 
 /// `argus-status {…,"usb_net_ip":"192.168.42.129","wifi_ip":…,"rpc":{"mode":"wifi",…}}` (None: no such line = app older than 0.3.3)
@@ -42,7 +46,8 @@ pub fn parse_net_status(dump: &str) -> Option<NetStatus> {
     let line = dump.lines().find_map(|l| l.trim().strip_prefix("argus-status "))?;
     let j: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
     let ip = |k: &str| j.get(k).and_then(|v| v.as_str()).map(str::trim).filter(|s| s.parse::<std::net::Ipv4Addr>().is_ok()).map(str::to_string);
-    Some(NetStatus { usb_net_ip: ip("usb_net_ip"), wifi_ip: ip("wifi_ip"), mode: j["rpc"]["mode"].as_str().map(str::to_string) })
+    Some(NetStatus { usb_net_ip: ip("usb_net_ip"), wifi_ip: ip("wifi_ip"), mode: j["rpc"]["mode"].as_str().map(str::to_string),
+                    auth: j["rpc"]["auth"].as_bool().unwrap_or(false) || j["rpc"]["auth"].as_u64() == Some(1) })
 }
 
 /// IPv4 addresses from `ip -4 -o addr show` (`3: wlan0    inet 192.168.1.5/24 brd … scope global wlan0`), loopback skipped.
@@ -178,6 +183,7 @@ async fn tick_one(st: &Arc<AppState>, serial: &str, want: bool, switched: bool, 
         return;
     }
 
+    if status.auth { fallback(st, serial, &fwd, cur.as_deref(), in_engine, HINT_SECURE).await; return; }
     let tep = format!("{ip}:{DEVICE_RPC_PORT}");
     if reachable(&ip).await {
         st.runtime.lock().await.entry(serial.to_string()).or_default().tether_fails = 0;
@@ -237,6 +243,8 @@ mod tests {
         assert_eq!(s.wifi_ip, None);
         let s = parse_net_status("argus-status {\"wifi_ip\":\"192.168.1.7\",\"rpc\":{\"mode\":\"wifi\"}}").unwrap();
         assert_eq!((s.usb_net_ip, s.wifi_ip.as_deref(), s.mode.as_deref()), (None, Some("192.168.1.7"), Some("wifi")));
+        assert!(!s.auth);
+        assert!(parse_net_status("argus-status {\"rpc\":{\"mode\":\"wifi\",\"auth\":true}}").unwrap().auth);
         assert!(parse_net_status("argus-rpc state=READY").is_none());
         let ips = parse_ips("1: lo    inet 127.0.0.1/8 scope host lo\n3: wlan0    inet 192.168.1.5/24 brd 192.168.1.255 scope global wlan0\n9: rndis0    inet 192.168.42.129/24 brd 192.168.42.255 scope global rndis0\n");
         assert_eq!(ips, vec!["192.168.1.5".to_string(), "192.168.42.129".to_string()]);

@@ -19,6 +19,9 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 sha2 = "0.10"
 # «Знания»/«Очередь»: .docx is a ZIP (deflate), PDF streams are zlib
 flate2 = "1"
+# opt-in secured RPC (rpcauth.rs): SPAKE2 pairing over a 2048-bit MODP group + OS randomness for tokens
+num-bigint = "0.4"
+getrandom = "0.2"
 
 # Agent mode: screenshot + mouse/keyboard (Windows only; stubs elsewhere)
 [target.'cfg(windows)'.dependencies]

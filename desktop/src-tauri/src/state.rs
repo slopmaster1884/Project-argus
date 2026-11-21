@@ -96,6 +96,8 @@ pub struct Node {
     pub tether: bool,
     /// why «USB-модем» is not used right now (short Russian hint for the UI)
     pub tether_hint: Option<String>,
+    /// LAN node paired by PIN: reached only through the authenticated forwarder (rpcauth.rs) — «🔒 защищено»
+    pub secure: bool,
 }
 
 impl Node {
@@ -106,7 +108,7 @@ impl Node {
                rpc_devices: 1, integrated: false, attempts: 0, retry_in: None, variant: None, beacon: false,
                in_engine: false, app_vc: None, app_version: None, update_available: None, update_skipped: false,
                bench_gbps: None, rtt_ms: None, speed: 0.0, speed_measured: false, role: "auto".into(), assigned: String::new(), helper: None,
-               temp_c: None, throttled: None, link: "usb".into(), tether: false, tether_hint: None }
+               temp_c: None, throttled: None, link: "usb".into(), tether: false, tether_hint: None, secure: false }
     }
     pub fn lan(id: &str, name: &str, endpoint: &str) -> Self {
         Self { kind: NodeKind::Lan, stage: NodeStage::Offline, transport: Transport::Lan,
@@ -166,6 +168,8 @@ pub struct DiscoveredView {
     pub app_vc: Option<u64>,
     /// older than the APK bundled with this desktop
     pub outdated: bool,
+    /// beacon `"auth":1`: secured node, «Добавить» asks for its PIN
+    pub auth: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -288,6 +292,9 @@ pub struct ClusterSnapshot {
     /// draft model to use: (path, MB reserved on the GPU)
     #[serde(skip)]
     pub draft: Option<(String, u64)>,
+    /// secured RPC: node endpoint -> local forwarder address for `--rpc` (filled by the launcher only)
+    #[serde(skip)]
+    pub rpc_map: HashMap<String, String>,
 }
 
 /// PC CPU as a model device (bench result + RAM it may lend to the model).
@@ -547,6 +554,7 @@ impl AppState {
             variant: d.variant.clone(), age_sec: now.saturating_duration_since(d.last_seen).as_secs(), added: added.contains(&d.id()),
             app_version: d.vn.clone(), app_vc: d.vc,
             outdated: matches!((d.vc, bundled_vc), (Some(a), Some(b)) if a < b),
+            auth: d.auth,
         }).collect();
         discovered.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
         ClusterSnapshot { host, gpus, nodes, total_mb, usable_mb, rpc_servers, split,
@@ -559,7 +567,7 @@ impl AppState {
                           roles_enabled: roles_on, helper_model: crate::helper::model_id(&settings.helper_model).to_string(),
                           helper_models: crate::helper::model_views(), helpers,
                           cpu, plan, draft_enabled: settings.draft_enabled,
-                          gguf, draft }
+                          gguf, draft, rpc_map: HashMap::new() }
     }
 }
 

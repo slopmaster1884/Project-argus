@@ -65,6 +65,9 @@ pub struct Settings {
     /// serials Argus itself switched into the node app's network mode (`--ez wifi true`) for «USB-модем»;
     /// switched back (`--ez wifi false`) when the user turns the option off
     pub usb_tether_switched: HashSet<String>,
+    /// secured RPC (rpcauth.rs, docs/SECURITY.md): LAN node id -> node token (hex) received by PIN pairing.
+    /// A node with a token is always reached through the authenticated forwarder, never in plain mode.
+    pub rpc_tokens: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -83,11 +86,17 @@ impl Default for Settings {
                auto_add_discovered: false, keep_loaded: true, last_launch: None,
                check_updates: true, skipped_version: None, skipped_node_version: None,
                roles: HashMap::new(), bench: HashMap::new(), roles_enabled: false, helper_model: String::new(),
-               draft_enabled: false, draft_path: None, usb_tether: HashSet::new(), usb_tether_switched: HashSet::new() }
+               draft_enabled: false, draft_path: None, usb_tether: HashSet::new(), usb_tether_switched: HashSet::new(),
+               rpc_tokens: HashMap::new() }
     }
 }
 
 impl Settings {
+    /// stored PIN-pairing token of a LAN node (secured RPC)
+    pub fn rpc_token(&self, id: &str) -> Option<crate::rpcauth::Token> {
+        self.rpc_tokens.get(id).and_then(|h| crate::rpcauth::token_from_hex(h))
+    }
+
     pub fn load(path: &Option<PathBuf>) -> Self {
         path.as_ref()
             .and_then(|p| std::fs::read_to_string(p).ok())

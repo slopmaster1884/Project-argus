@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var heatHint: TextView
     private lateinit var wifiToggle: Button; private lateinit var wifiAddr: TextView; private lateinit var wifiInfo: TextView
     private lateinit var wifiWarn: TextView; private lateinit var wifiBattery: Button
+    private lateinit var secureToggle: Button; private lateinit var securePin: TextView; private lateinit var secureInfo: TextView
     private lateinit var updVersion: TextView; private lateinit var updStatus: TextView; private lateinit var updButton: Button
     private var updDialog: AlertDialog? = null
     private var updAsked: String? = null      // "vn/vc" already asked in this screen session («Позже»)
@@ -112,7 +113,12 @@ class MainActivity : Activity() {
             wifiInfo = label("", 11f, DIM, mono = false)
             wifiWarn = label("⚠ Только домашняя сеть: у RPC нет пароля", 12f, AMBER, mono = false).apply { setPadding(0, dp(8), 0, dp(8)) }
             wifiBattery = btn("Отключить оптимизацию батареи", AMBER) { requestBatteryExemption() }
+            // secured RPC (docs/SECURITY.md): PIN pairing + token; off by default, only with Wi-Fi mode
+            secureToggle = btn("Защищённый режим: выкл", CYAN) { toggleSecure() }
+            securePin = label("", 30f, GREEN).apply { setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setPadding(0, dp(10), 0, dp(2)) }
+            secureInfo = label("", 11f, DIM, mono = false)
             addView(wifiToggle); addView(wifiAddr); addView(wifiInfo); addView(wifiWarn); addView(wifiBattery)
+            addView(secureToggle); addView(securePin); addView(secureInfo)
         })
 
         // self-update (0.3.1): always asks — «Обновить» / «Позже» / «Пропустить эту версию»
@@ -258,6 +264,14 @@ class MainActivity : Activity() {
         tick(reschedule = false)
     }
 
+    /** Secured mode: rpc-server moves behind the PIN/token gateway; restarts rpc-server if the node runs in Wi-Fi mode. */
+    private fun toggleSecure() {
+        val on = !RpcService.securePref(this)
+        RpcService.setSecurePref(this, on)
+        if (RpcService.running) startForegroundService(Intent(this, RpcService::class.java).putExtra("secure", on))
+        tick(reschedule = false)
+    }
+
     private fun batteryExempt() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
     private fun requestBatteryExemption() {
         runCatching {
@@ -358,6 +372,20 @@ class MainActivity : Activity() {
             else -> "Слушает 0.0.0.0:${RpcService.port} · маяк UDP :${RpcService.BEACON_PORT} каждые 2 с (отправлено ${RpcService.beacons})"
         }
         wifiBattery.visibility = if (on && !batteryExempt()) View.VISIBLE else View.GONE
+        val sec = RpcService.securePref(this)
+        secureToggle.visibility = vis
+        secureToggle.text = if (sec) "Защищённый режим: вкл" else "Защищённый режим: выкл"
+        secureToggle.setTextColor(if (sec) GREEN else CYAN); secureToggle.background = box(PANEL, if (sec) GREEN else CYAN, 4)
+        wifiWarn.text = if (sec) "🔒 Вход только с ключом (PIN). Трафик не шифруется — это не замена VPN" else "⚠ Только домашняя сеть: у RPC нет пароля"
+        wifiWarn.setTextColor(if (sec) DIM else AMBER)
+        val pin = AuthGateway.pin
+        securePin.visibility = if (on && sec && pin != null) View.VISIBLE else View.GONE
+        securePin.text = pin?.let { "PIN ${it.substring(0, 3)} ${it.substring(3)}" } ?: ""
+        secureInfo.visibility = if (on && sec) View.VISIBLE else View.GONE
+        secureInfo.text = when {
+            !RpcService.running || !RpcService.secure -> "Применится при запуске узла в Wi-Fi режиме."
+            else -> "Argus на ПК → «Найдено в сети» → «Добавить» → введите PIN. Сопряжено: ${AuthGateway.paired} · отклонено: ${AuthGateway.rejected}. Нужен Argus 0.3.5+."
+        }
     }
 
     private fun renderRole() {

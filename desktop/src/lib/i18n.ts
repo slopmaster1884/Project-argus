@@ -41,6 +41,20 @@ const ru = {
   "f.route.desc": "Короткие вопросы (до 200 символов, без кода и вложений) отвечает готовый Помощник, остальные — модель кластера. Нужен эксперимент «Роли» и узел с ролью «Помощник».",
   "f.lang.title": "Язык интерфейса",
   "f.lang.desc": "Пока переведены меню и этот экран.",
+  "sec.badge": "🔒 защищено",
+  "sec.badgeHint": "Защищённый режим: подключение только с ключом, полученным по PIN. Трафик не шифруется.",
+  "sec.found": "🔒 PIN",
+  "sec.foundHint": "Нода в защищённом режиме — при добавлении нужен PIN с её экрана",
+  "sec.pinTitle": "PIN ноды",
+  "sec.pinDesc": "Нода «{name}» в защищённом режиме. Введите 6 цифр, которые она показывает (Argus Node → Wi-Fi режим, или терминал argus-node-linux.sh).",
+  "sec.pinLabel": "PIN (6 цифр)",
+  "sec.pair": "Сопрячь",
+  "sec.cancel": "Отмена",
+  "sec.repair": "Ввести PIN",
+  "sec.lanPin": "PIN (если нода защищена)",
+  "sec.lanPinHint": "Для ноды с ARGUS_SECURE=1 / «Защищённый режим» — 6 цифр с экрана ноды.",
+  "sec.pinRequired": "Нода в защищённом режиме — введите её PIN.",
+  "sec.added": "Нода «{name}» сопряжена и добавлена 🔒",
 } as const;
 
 export type I18nKey = keyof typeof ru;
@@ -82,6 +96,20 @@ const en: Record<I18nKey, string> = {
   "f.route.desc": "Short questions (under 200 characters, no code or attachments) go to a ready Helper, the rest to the cluster model. Needs the «Roles» experiment and a node with the Helper role.",
   "f.lang.title": "Interface language",
   "f.lang.desc": "Menus and this screen are translated so far.",
+  "sec.badge": "🔒 secured",
+  "sec.badgeHint": "Secured mode: connects only with the key obtained by PIN pairing. Traffic is not encrypted.",
+  "sec.found": "🔒 PIN",
+  "sec.foundHint": "This node runs in secured mode — adding it needs the PIN shown on the node",
+  "sec.pinTitle": "Node PIN",
+  "sec.pinDesc": "Node “{name}” runs in secured mode. Enter the 6 digits it shows (Argus Node → Wi-Fi mode, or the argus-node-linux.sh terminal).",
+  "sec.pinLabel": "PIN (6 digits)",
+  "sec.pair": "Pair",
+  "sec.cancel": "Cancel",
+  "sec.repair": "Enter PIN",
+  "sec.lanPin": "PIN (if the node is secured)",
+  "sec.lanPinHint": "For a node with ARGUS_SECURE=1 / “Secured mode” — the 6 digits shown on the node.",
+  "sec.pinRequired": "This node runs in secured mode — enter its PIN.",
+  "sec.added": "Node “{name}” paired and added 🔒",
 };
 
 const dicts: Record<Lang, Record<I18nKey, string>> = { ru, en };
