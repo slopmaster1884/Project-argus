@@ -9,7 +9,7 @@
 ![engine](https://img.shields.io/badge/engine-llama.cpp-ff4081)
 ![license](https://img.shields.io/badge/free-open_source-00e676)
 
-[Download](../../releases) · [Quick start](#quick-start) · [Support](SUPPORT.md) · [Русский](README.md)
+[Download](../../releases) · [Quick start](#quick-start) · [Linux](#linux) · [Second PC](#second-pc--laptop-as-a-node) · [Support](SUPPORT.md) · [Русский](README.md)
 
 **Built by one person on a GTX 960. If it's useful to you, [chip in for test hardware](SUPPORT.md) ❤️**
 
@@ -31,7 +31,7 @@ Argus benchmarks each device on connect (speed and free memory) and hands out la
 
 - PC side: Tauri 2 app (Rust + React/TS) running `llama-server` (llama.cpp b12008, Vulkan or CUDA) with `--rpc` pointing at the nodes.
 - Phone side: native APK with a static musl `rpc-server`. USB goes through `adb forward` or, since 0.3.4, through USB tethering. On my setup (GTX 960 + phones, Gemma 2 2B) tethering took generation from 16 to 36 tokens/s compared to `adb forward`. Wi-Fi nodes announce themselves via UDP beacon on port 50053.
-- Linux PCs and Raspberry Pi can be nodes too: `bash scripts/argus-node-linux.sh`.
+- Linux PCs, Raspberry Pi and a second Windows PC can be nodes too: see [Linux](#linux) and [Second PC / laptop as a node](#second-pc--laptop-as-a-node).
 
 ## Features
 
@@ -55,6 +55,35 @@ Argus benchmarks each device on connect (speed and free memory) and hands out la
 5. When the status says "Ready", chat.
 
 The installer isn't signed yet, so SmartScreen may complain: "More info" → "Run anyway".
+
+Without a cable: turn on "Wi-Fi режим" in Argus Node and the phone appears under Cluster → "Найдено в сети" (Found on network).
+
+## Linux
+
+Argus runs on Linux too (AppImage / .deb): you need a Vulkan driver, and udev rules for USB phones (`sudo apt install android-sdk-platform-tools-common`).
+
+To turn a Linux PC, laptop or Raspberry Pi into a **helper node**, run one command in a terminal:
+
+```
+curl -fsSL https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/scripts/install.sh | bash
+```
+
+The installer checks everything, asks about the firewall and autostart, and tells you what to click in Argus. Step by step for beginners: [docs/LINUX.en.md](docs/LINUX.en.md).
+
+## Second PC / laptop as a node
+
+A second computer (Windows or Linux) can lend Argus its memory and GPU over your home network. It doesn't need Argus installed.
+
+- **Windows:** Win + R → `powershell` → paste and press Enter:
+  ```
+  irm https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/scripts/argus-node-windows.ps1 -OutFile $env:TEMP\argus-node.ps1; powershell -ExecutionPolicy Bypass -File $env:TEMP\argus-node.ps1
+  ```
+  Or download the project and double-click `scripts\argus-node-windows.cmd`.
+- **Linux:** the command from the section above.
+
+Then on the main PC: **Cluster → "Найдено в сети" → "Добавить"** (or "Добавить ноду по IP" / Add node by IP). Details and what to do if it doesn't show up: [docs/PC-NODE.en.md](docs/PC-NODE.en.md).
+
+⚠ The node has no password: home network only, never expose port 50052 to the internet.
 
 ## What fits
 
