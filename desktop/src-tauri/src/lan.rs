@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::{Arc, OnceLock}, time::Duration};
 use tauri::{AppHandle, State};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, UdpSocket}, time::{sleep, timeout}};
 
-const RPC_PROTO_MAJOR: u8 = 8; // ggml/include/ggml-rpc.h @ b12008
+pub const RPC_PROTO_MAJOR: u8 = 8; // ggml/include/ggml-rpc.h @ b12008
 const CMD_GET_DEVICE_MEMORY: u8 = 11;
 const CMD_HELLO: u8 = 14;
 const CMD_DEVICE_COUNT: u8 = 15;
@@ -74,6 +74,20 @@ pub async fn rpc_query(endpoint: &str) -> Result<RpcInfo> {
     };
     // a busy server (another client attached) never answers HELLO
     timeout(Duration::from_millis(2500), io).await.map_err(|_| anyhow::anyhow!("rpc-server занят другим клиентом или не отвечает"))?
+}
+
+/// HELLO only (netdiag «Проверить связь»): the rpc-server protocol version, or an error.
+/// Unlike `rpc_query` it does not judge the version — the caller compares it with `RPC_PROTO_MAJOR`.
+pub async fn rpc_hello(endpoint: &str, wait: Duration) -> Result<(u8, u8, u8)> {
+    let mut s = timeout(wait, TcpStream::connect(endpoint)).await
+        .map_err(|_| anyhow::anyhow!("connect timeout"))??;
+    s.set_nodelay(true).ok();
+    let io = async {
+        send(&mut s, CMD_HELLO, &[0u8; CONN_CAPS]).await?;
+        let h = recv(&mut s, 4 + CONN_CAPS).await?;
+        Ok::<_, anyhow::Error>((h[0], h[1], h[2]))
+    };
+    timeout(wait, io).await.map_err(|_| anyhow::anyhow!("HELLO timeout"))?
 }
 
 async fn tcp_alive(endpoint: &str) -> bool {

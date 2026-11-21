@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Columns3, Cpu, FlaskConical, Gauge, Loader2, Share2, Thermometer, PanelRight, Plug, Plus, Radar, RefreshCw, RotateCw, ShieldAlert, Trash2, Usb, Wifi } from "lucide-react";
+import { Columns3, Cpu, FlaskConical, Gauge, Loader2, Share2, Thermometer, PanelRight, Plug, Plus, Radar, RefreshCw, RotateCw, ShieldAlert, Stethoscope, Trash2, Usb, Wifi } from "lucide-react";
+import { useT } from "../lib/i18n";
 import clsx from "clsx";
 import { useCluster } from "../store/cluster";
 import {
@@ -78,7 +79,8 @@ const fmtTps = (t: number | null | undefined) => (t == null ? null : t >= 10 ? t
 export const tableNodes = (s: ClusterSnapshot) => [...(s.gpus.length ? s.gpus : [s.host]), ...s.nodes];
 
 export default function DevicePanel() {
-  const { snapshot, setWizard, setLanDialog, pushToast } = useCluster();
+  const { snapshot, setWizard, setLanDialog, setNetDiag, pushToast } = useCluster();
+  const t = useT();
   const [sel, setSel] = useState("host");
   const [restarting, setRestarting] = useState(false);
   const wide = useWide();
@@ -105,6 +107,7 @@ export default function DevicePanel() {
                 </button>
               )}
               <button className="btn" data-tour="lan" onClick={() => setLanDialog(true)}><Wifi size={12} /> Добавить ноду по IP</button>
+              <button className="btn" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address: "" })}><Stethoscope size={12} /> {t("nd.button")}</button>
               <button className="btn-primary" data-tour="usb" onClick={() => setWizard(true)}><Usb size={12} /> Connect via USB</button>
               {!wide && <button className="btn" title="Inspector: свойства выбранного устройства" onClick={() => setInsp(true)}><PanelRight size={12} /> Inspector</button>}
             </div>
@@ -206,6 +209,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
                   {n.updateAvailable && <span title={`установлена ${n.appVersion ?? n.version ?? "?"}, в комплекте ${n.updateAvailable}`} className="tag border border-pl-orange/50 text-pl-orange">Нода устарела</span>}
                   </div>
                   {n.stage === "error" && n.retryIn != null && <div className="mt-0.5 text-2xs text-pl-dim">повтор через {n.retryIn} с · попытка {n.attempts + 1}</div>}
+                  {needsDiag(n) && <DiagButton n={n} small />}
                 </td>
                 <td className="max-w-[170px] truncate px-3 py-2 text-pl-mute" title={n.device ?? n.endpoint ?? undefined}>{n.device ?? n.endpoint ?? (n.transport === "local" ? "local" : "—")}</td>
                 <td className="w-36 px-3 py-2">
@@ -314,6 +318,7 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
           {node.transport === "usb" && <RebenchButton node={node} />}
           {node.updateAvailable && <NodeUpdateButton node={node} />}
           {node.transport !== "local" && <ReconnectButton node={node} />}
+          {node.transport === "lan" && <DiagButton n={node} />}
           {node.transport !== "local" && <NodeExtraRoles node={node} />}
           {node.transport === "lan" && (
             <button className="btn w-full justify-center border-pl-red/50 text-pl-red" onClick={() => removeLanNode(node.id)}><Trash2 size={12} /> Удалить LAN-ноду</button>
@@ -527,6 +532,36 @@ function NodeUpdateButton({ node }: { node: ClusterNode }) {
   );
 }
 
+/** LAN node that the PC can't reach right now → offer «Проверить связь» */
+const needsDiag = (n: ClusterNode) => n.transport === "lan" && (n.stage === "offline" || n.stage === "error");
+
+/** «Проверить связь» for a LAN node (table: small, inspector: full width). */
+function DiagButton({ n, small }: { n: ClusterNode; small?: boolean }) {
+  const setNetDiag = useCluster((s) => s.setNetDiag);
+  const t = useT();
+  const address = n.endpoint ?? n.id.replace(/^lan:/, "");
+  return (
+    <button className={small ? "btn mt-1 h-6 px-1.5 font-sans text-2xs" : "btn w-full justify-center"} title={t("nd.buttonHint")}
+      onClick={(e) => { e.stopPropagation(); setNetDiag({ address, name: n.name }); }}>
+      <Stethoscope size={small ? 11 : 12} /> {t("nd.button")}
+    </button>
+  );
+}
+
+/** «Найдено в сети» row of an already added node: «Проверить связь» (issue #3: heard, but OFFLINE after «Добавить»). */
+function DiagAddressButton({ address, name }: { address: string; name: string }) {
+  const setNetDiag = useCluster((s) => s.setNetDiag);
+  const t = useT();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="text-2xs text-pl-dim">добавлена</span>
+      <button className="btn h-6 px-1.5 font-sans text-2xs" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address, name })}>
+        <Stethoscope size={11} /> {t("nd.button")}
+      </button>
+    </span>
+  );
+}
+
 function ReconnectButton({ node }: { node: ClusterNode }) {
   const pushToast = useCluster((s) => s.pushToast);
   const [busy, setBusy] = useState(false);
@@ -587,7 +622,7 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
                 </td>
                 <td className={clsx("px-3 py-2", d.ageSec > 10 ? "text-pl-orange" : "text-pl-green")}>{d.ageSec > 10 ? `${d.ageSec} с назад` : "● сейчас"}</td>
                 <td className="px-3 py-2 text-right">
-                  {d.added ? <span className="text-2xs text-pl-dim">добавлена</span> : (
+                  {d.added ? (snap.nodes.some((n) => n.id === d.id && needsDiag(n)) ? <DiagAddressButton address={d.endpoint} name={d.name} /> : <span className="text-2xs text-pl-dim">добавлена</span>) : (
                     <button className="btn h-6" disabled={busy === d.id} onClick={() => add(d)}>
                       {busy === d.id ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />} Добавить
                     </button>

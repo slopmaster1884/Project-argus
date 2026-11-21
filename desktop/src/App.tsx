@@ -16,13 +16,14 @@ import KnowledgeView from "./components/KnowledgeView";
 import UsbWizard from "./components/UsbWizard";
 import StatusBar from "./components/StatusBar";
 import LanDialog from "./components/LanDialog";
+import NetDiag from "./components/NetDiag";
 import Tour from "./components/Tour";
 import Toaster from "./components/Toaster";
 import { reattach, applyEngine } from "./lib/launch";
 import { setPlatform } from "./lib/agent";
 
 export default function App() {
-  const { view, setSnapshot, wizardOpen, lanDialog, tourOpen, setRun, updateDialog, aboutOpen } = useCluster();
+  const { view, setSnapshot, wizardOpen, lanDialog, netDiag, tourOpen, setRun, updateDialog, aboutOpen } = useCluster();
   const nodeAsk = useNodeToAsk();
 
   // self-update: ASK (never install by itself). «Позже» = not again this session, «Пропустить» = never for that version.
@@ -93,6 +94,7 @@ export default function App() {
       <StatusBar />
       {wizardOpen && <UsbWizard />}
       {lanDialog && <LanDialog />}
+      {netDiag && <NetDiag key={netDiag.address} />}
       {tourOpen && <Tour />}
       {aboutOpen && <AboutDialog />}
       {updateDialog ? <UpdateDialog /> : nodeAsk && !wizardOpen && !tourOpen && <NodeUpdateDialog key={nodeAsk[0].id} node={nodeAsk[0]} version={nodeAsk[1]} />}

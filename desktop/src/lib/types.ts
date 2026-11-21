@@ -288,3 +288,30 @@ export interface FeaturesView extends FeaturesConfig {
 
 /** route_target: which OpenAI-compatible backend answers a prompt */
 export interface RouteTarget { base: string; model: string; kind: "main" | "helper" }
+
+// ---- «Проверить связь» (netdiag.rs)
+export type DiagStepId = "subnet" | "beacon" | "tcp" | "hello";
+export interface DiagStep {
+  id: DiagStepId;
+  ok: boolean;
+  skipped: boolean;     // not run / could not be judged — shown as "–"
+  ms: number;
+  code: string;         // i18n: nd.code.<id>.<code>
+  arg: string | null;   // substituted for {x}
+  detail: string;       // raw technical detail (OS error, addresses)
+}
+export type DiagVerdict =
+  | "ok" | "firewall_likely" | "rpc_not_running" | "different_subnet" | "ap_isolation_likely"
+  | "version_mismatch" | "rpc_busy" | "unreachable" | "unknown";
+export type DiagHint =
+  | "linuxScript" | "linuxUfw" | "linuxFirewalld" | "windowsFirewall" | "restartNode" | "checkPort" | "sameWifi"
+  | "guestNetwork" | "checkIp" | "apIsolation" | "deviceOn" | "pcFirewall" | "updateNode" | "busy";
+export interface DiagReport {
+  ip: string;
+  port: number;
+  localIp: string | null;
+  steps: DiagStep[];
+  verdict: DiagVerdict;
+  hints: DiagHint[];
+  totalMs: number;
+}
