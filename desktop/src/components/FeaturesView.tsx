@@ -6,6 +6,7 @@ import type { FeaturesConfig, FeaturesView as FView } from "../lib/types";
 import { useLang, useT, type Lang } from "../lib/i18n";
 import { useCluster } from "../store/cluster";
 import WebChatCard, { Toggle } from "./WebChatCard";
+import { toastError } from "../lib/errors";
 
 const MOCK: FView = {
   webchat: { enabled: false, pin: "123456" }, telegram: { enabled: false, token: "", allowedIds: [] },
@@ -32,7 +33,7 @@ export default function FeaturesView() {
       // keep local edits, refresh only the live status fields
       setView((cur) => cur ? { ...cur, ...Object.fromEntries(READONLY.map((k) => [k, v[k]])) } as FView : v);
       setIdsText((cur) => cur || v.telegram.allowedIds.join(", "));
-    }).catch((e) => pushToast("error", String(e)));
+    }).catch((e) => toastError(e));
     load();
     const iv = setInterval(load, 3000);
     return () => { stop = true; clearInterval(iv); };
@@ -48,7 +49,7 @@ export default function FeaturesView() {
         const patch = { webchat: next.webchat, telegram: next.telegram, routing: next.routing, lang: next.lang };
         const v = await featuresSet(patch as unknown as FeaturesConfig);
         if (v) setView((cur) => cur ? { ...cur, ...Object.fromEntries(READONLY.map((k) => [k, v[k]])), webchat: { ...cur.webchat, pin: v.webchat.pin } } as FView : v);
-      } catch (e) { pushToast("error", String(e)); }
+      } catch (e) { toastError(e); }
     }, 400);
   };
 

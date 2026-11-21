@@ -14,6 +14,8 @@ import Drawer from "./Drawer";
 import { useSteady, useWide } from "../lib/ui";
 import HfBrowser from "./HfBrowser";
 import { Toggle } from "./ChatView";
+import { toastError } from "../lib/errors";
+import ErrorBox from "./ErrorBox";
 
 export const fitTag = {
   fits: ["FITS", "border-pl-green/50 text-pl-green", "green"],
@@ -145,7 +147,7 @@ export default function ModelLibrary() {
               </table>
             </div>
           )}
-          {run.status === "error" && <div className="m-3 border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{run.message}</div>}
+          {run.status === "error" && <ErrorBox error={run.message} className="m-3" />}
           {run.status === "broken" && <EngineBanner />}
         </div>
         <Drawer wide={wide} open={side} onClose={() => setSide(false)} title="План запуска" width={320}>
@@ -188,7 +190,7 @@ function SplitPreview({ model, onVariant }: { model: ModelEntry; onVariant: (m: 
       <div className="panel-head"><span className="flex shrink-0 items-center gap-1.5"><Split size={11} className="text-pl-blue" /> План запуска</span>
         <span className="min-w-0 truncate pl-2 normal-case tracking-normal text-pl-dim" title={model.name}>{model.name}</span></div>
       <div className="space-y-2.5 p-3 text-xs">
-        {err ? <div className="text-2xs text-pl-red">{err}</div> : !plan ? <div className="flex items-center gap-1.5 text-2xs text-pl-dim"><Loader2 size={11} className="animate-spin" /> считаю…</div> : (
+        {err ? <ErrorBox error={err} /> : !plan ? <div className="flex items-center gap-1.5 text-2xs text-pl-dim"><Loader2 size={11} className="animate-spin" /> считаю…</div> : (
           <>
             <div className="flex items-baseline justify-between">
               <span className="text-pl-dim">нужно {gb(need)} ГБ</span>
@@ -276,7 +278,7 @@ function SpeedPanel() {
   }, [target?.id, target?.hfRepo, target?.hfFile, draftOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleDraft = (v: boolean) => {
     setPending(v);
-    setDraftEnabled(v).catch((e) => { setPending(null); pushToast("error", String(e)); });
+    setDraftEnabled(v).catch((e) => { setPending(null); toastError(e); });
   };
   const sizeGb = ds ? ds.sizeMb / 1024 : 0;
   const draftSub = ds?.name

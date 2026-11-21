@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, CircleHelp, Hexagon, Info } from "lucide-react";
+import { ChevronRight, CircleHelp, Hexagon, Info, Sparkles } from "lucide-react";
+import { useT } from "../lib/i18n";
 import clsx from "clsx";
 import { useCluster } from "../store/cluster";
 import { gb } from "../lib/format";
@@ -7,7 +8,8 @@ import { gb } from "../lib/format";
 const titles = { chat: "Chat", devices: "Cluster Topology", models: "Model Registry", api: "API Access", parallel: "Параллельный тест", features: "Возможности", queue: "Ночная очередь", knowledge: "Знания" };
 
 export default function TopBar() {
-  const { view, snapshot, run, setTour, setAbout, update, setUpdateDialog } = useCluster();
+  const { view, snapshot, run, setTour, setFirstRun, setAbout, update, setUpdateDialog } = useCluster();
+  const t = useT();
   const upd = update?.available && update.latest ? update.latest.version : null;
   const warming = run.status === "ready" && !!snapshot?.engine.warming;
   const [now, setNow] = useState(new Date());
@@ -47,6 +49,9 @@ export default function TopBar() {
         )}
         <button title="О программе · обновления" onClick={() => setAbout(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-pl-line2 text-pl-mute hover:bg-pl-bg3 hover:text-pl-text">
           <Info size={13} />
+        </button>
+        <button title={t("fr.reopen")} onClick={() => setFirstRun(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-pl-line2 text-pl-blue hover:bg-pl-bg3">
+          <Sparkles size={13} />
         </button>
         <button title="Обучение" onClick={() => setTour(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-pl-line2 text-pl-mute hover:bg-pl-bg3 hover:text-pl-text">
           <CircleHelp size={13} />

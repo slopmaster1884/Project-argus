@@ -4,6 +4,7 @@ import { bestPick, modelPoolMb, requiredMb } from "../lib/models";
 import { deploy } from "../lib/launch";
 import { gb } from "../lib/format";
 import { useSteady } from "../lib/ui";
+import ErrorBox from "./ErrorBox";
 
 /** Empty-state card: one button that picks the best curated model for the pool and deploys it. */
 export default function QuickStart() {
@@ -32,7 +33,7 @@ export default function QuickStart() {
             <Usb size={11} /> Добавить устройство, чтобы запускать модели крупнее
           </button>
         )}
-        {run.status === "error" && <div className="mt-3 border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{run.message}</div>}
+        {run.status === "error" && <ErrorBox error={run.message} className="mt-3" />}
       </div>
     </div>
   );

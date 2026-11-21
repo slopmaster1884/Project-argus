@@ -5,6 +5,7 @@ import { diagnoseNode } from "../lib/api";
 import { t as tr, useLang, type I18nKey } from "../lib/i18n";
 import { useCluster } from "../store/cluster";
 import type { DiagHint, DiagReport, DiagStep, DiagStepId } from "../lib/types";
+import ErrorBox from "./ErrorBox";
 
 const STEPS: DiagStepId[] = ["subnet", "beacon", "tcp", "hello"];
 const DEFAULT_PORT = 50052;
@@ -96,7 +97,7 @@ export default function NetDiag() {
               {busy ? <Loader2 size={12} className="animate-spin" /> : <Stethoscope size={12} />} {report || err ? T("nd.again") : T("nd.run")}
             </button>
           </div>
-          {err && <div className="border-l-2 border-pl-red bg-pl-red/10 p-2 text-pl-red">{err}</div>}
+          {err && <ErrorBox error={err} />}
 
           {(busy || report) && (
             <ol className="divide-y divide-pl-line border border-pl-line bg-pl-bg0">

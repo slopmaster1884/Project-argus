@@ -19,6 +19,8 @@ import Meter, { loadTone, Progress } from "./Meter";
 import Drawer from "./Drawer";
 import { helperPct, isDownloadPhase, useWide } from "../lib/ui";
 import type { ClusterNode, ClusterSnapshot, DiscoveredNode, HelperState, HelperView, NodeRole, NodeStage, SplitPlan } from "../lib/types";
+import { toastError } from "../lib/errors";
+import ErrorBox from "./ErrorBox";
 
 export const stageTag: Record<NodeStage, [string, string]> = {
   connected: ["ONLINE", "border-pl-green/50 text-pl-green"],
@@ -107,7 +109,7 @@ export default function DevicePanel() {
               <button className="btn" title="Повторить подготовку упавших устройств, перезапустить adb при сбое" onClick={() => rescan()}><RefreshCw size={12} /> Rescan</button>
               {snapshot.engine.canRestart && (
                 <button className="btn" disabled={restarting} title="Перезапустить llama-server с текущим набором нод"
-                  onClick={async () => { setRestarting(true); try { await restartEngine(); pushToast("info", "Движок перезапускается…"); } catch (e) { pushToast("error", String(e)); } setRestarting(false); }}>
+                  onClick={async () => { setRestarting(true); try { await restartEngine(); pushToast("info", "Движок перезапускается…"); } catch (e) { toastError(e); } setRestarting(false); }}>
                   {restarting ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Перезапустить движок
                 </button>
               )}
@@ -146,7 +148,7 @@ function ShareBench() {
       onClick={async (e) => {
         e.stopPropagation(); setBusy(true);
         try { await navigator.clipboard.writeText(await exportBenchResults()); pushToast("ok", "Результаты скопированы — вставьте их, куда нужно"); }
-        catch (er) { pushToast("error", `Не получилось скопировать: ${String(er)}`); }
+        catch (er) { toastError(er, "error", "Не получилось скопировать"); }
         setBusy(false);
       }}>
       {busy ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} Поделиться результатами
@@ -226,7 +228,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
                 <td className="whitespace-nowrap px-3 py-2 text-pl-mute">{n.rttMs != null ? `${n.rttMs.toFixed(1)} мс` : "—"}</td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   {n.transport === "local" ? <span className="whitespace-nowrap font-sans text-2xs text-pl-dim">всегда в модели</span> : (
-                    <select value={n.role} title={ROLE_HINT[n.role]} onChange={(e) => setNodeRole(n.id, e.target.value as NodeRole).catch((er) => pushToast("error", String(er)))}
+                    <select value={n.role} title={ROLE_HINT[n.role]} onChange={(e) => setNodeRole(n.id, e.target.value as NodeRole).catch((er) => toastError(er))}
                       className="h-6 border border-pl-line2 bg-pl-bg3 px-1 font-sans text-2xs text-pl-text">
                       {roleChoices(snap, n.role).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                     </select>
@@ -330,7 +332,7 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
           )}
         </div>
       )}
-      {node.error && <div className="m-4 border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{node.error}</div>}
+      {node.error && <ErrorBox error={node.error} className="m-4" />}
       <div className="mt-auto border-t border-pl-line p-4 font-mono text-2xs leading-5 text-pl-dim">
         {node.transport === "local"
           ? "llama-server runs here and drives every RPC node."
@@ -352,7 +354,7 @@ function RolePicker({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot }
       <div className="mb-1 text-pl-text">Роль</div>
       <div className="grid grid-cols-2 gap-px">
         {choices.map((r) => (
-          <button key={r} title={ROLE_HINT[r]} onClick={() => setNodeRole(node.id, r).catch((e) => pushToast("error", String(e)))}
+          <button key={r} title={ROLE_HINT[r]} onClick={() => setNodeRole(node.id, r).catch((e) => toastError(e))}
             className={clsx("border px-2 py-1 text-left text-2xs",
               node.role === r ? (r === "helper" ? "border-pl-violet bg-pl-violet/15 text-pl-text" : "border-pl-blue bg-pl-blue2/25 text-pl-text") : "border-pl-line2 bg-pl-bg2 text-pl-mute hover:bg-pl-bg3")}>
             {ROLE_LABEL[r]}
@@ -399,7 +401,7 @@ function HelperLine({ h, onRetry }: { h: HelperView; onRetry?: () => void }) {
 function RetryHelper({ id, onDone }: { id: string; onDone?: () => void }) {
   const pushToast = useCluster((s) => s.pushToast);
   return (
-    <button className="btn h-6" onClick={async () => { try { await retryHelper(id); onDone?.(); pushToast("info", "Пробую запустить Помощника снова…"); } catch (e) { pushToast("error", String(e)); } }}>
+    <button className="btn h-6" onClick={async () => { try { await retryHelper(id); onDone?.(); pushToast("info", "Пробую запустить Помощника снова…"); } catch (e) { toastError(e); } }}>
       <RotateCw size={11} /> Повторить
     </button>
   );
@@ -412,7 +414,7 @@ function UsbTetherSwitch({ node }: { node: ClusterNode }) {
   const active = node.link === "tether" && node.stage === "connected";
   return (
     <div className="space-y-1.5">
-      <Toggle on={on} set={(v) => setUsbTether(node.id, v).catch((e) => pushToast("error", String(e)))}
+      <Toggle on={on} set={(v) => setUsbTether(node.id, v).catch((e) => toastError(e))}
         label="USB-модем" sub="связь с телефоном через его USB-модем вместо adb-проброса" />
       {on && node.stage === "connected" && (active
         ? <p className="text-2xs leading-4 text-pl-green">Работает через USB-модем · {node.endpoint}</p>
@@ -437,7 +439,7 @@ function RebenchButton({ node }: { node: ClusterNode }) {
       onClick={async () => {
         setBusy(true);
         try { const g = await rebenchNode(node.id); pushToast("ok", `«${node.name}»: ${g.toFixed(1)} ГБ/с — учту при следующем запуске модели`); }
-        catch (e) { pushToast("error", String(e)); }
+        catch (e) { toastError(e); }
         setBusy(false);
       }}>
       {busy ? <><Loader2 size={12} className="animate-spin" /> Тест скорости…</> : <><Gauge size={12} /> Повторить тест скорости</>}
@@ -454,7 +456,7 @@ function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
   const ready = snap.helpers.filter((h) => h.ready).length;
   async function pick(model: string) {
     try { await setHelperModel(model); pushToast("info", "Модель Помощника изменена — ноды перезапустят её сами"); }
-    catch (e) { pushToast("error", String(e)); }
+    catch (e) { toastError(e); }
   }
   return (
     <div className="panel">
@@ -464,7 +466,7 @@ function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
       </div>
       <div className="grid grid-cols-1 gap-px bg-pl-line text-xs lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-3 bg-pl-bg1 p-3">
-          <Toggle on={snap.rolesEnabled} set={(v) => setRolesEnabled(v).catch((e) => pushToast("error", String(e)))}
+          <Toggle on={snap.rolesEnabled} set={(v) => setRolesEnabled(v).catch((e) => toastError(e))}
             label="Роль «Помощник»" sub="свободная нода запускает свою маленькую модель рядом с основной" />
           <p className="text-2xs leading-4 text-pl-dim">
             Помощник придумывает названия чатов, делает «Сводку» переписки и отвечает в «Параллельном тесте» — основная модель при этом не отвлекается.
@@ -529,7 +531,7 @@ function NodeUpdateButton({ node }: { node: ClusterNode }) {
         try {
           if (wifi) pushToast("info", await wifiNodeUpdate(node.id));
           else { await updateUsbNode(node.id); pushToast("info", `«${node.name}»: обновление ноды до ${node.updateAvailable}…`); }
-        } catch (e) { pushToast("error", String(e)); }
+        } catch (e) { toastError(e); }
         setBusy(false);
       }}>
       {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {wifi ? "Обновить по Wi-Fi" : `Обновить ноду до ${node.updateAvailable}`}
@@ -575,7 +577,7 @@ function ReconnectButton({ node }: { node: ClusterNode }) {
       title={node.transport === "usb" ? "Снять проброс порта, перезапустить RpcService на устройстве и подготовить ноду заново" : "Проверить ноду сейчас"}
       onClick={async () => {
         setBusy(true);
-        try { await reconnectNode(node.id); pushToast("info", `«${node.name}»: переподключение…`); } catch (e) { pushToast("error", String(e)); }
+        try { await reconnectNode(node.id); pushToast("info", `«${node.name}»: переподключение…`); } catch (e) { toastError(e); }
         setBusy(false);
       }}>
       {busy ? <Loader2 size={12} className="animate-spin" /> : <Plug size={12} />} Переподключить
@@ -593,7 +595,7 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
     if (d.auth) { setPinFor(d); return; }   // secured node: PIN first
     setBusy(d.id);
     try { await addDiscoveredNode(d.id); pushToast("ok", `Нода «${d.name}» добавлена`); }
-    catch (e) { if (isPinRequired(e)) setPinFor(d); else pushToast("error", String(e)); }
+    catch (e) { if (isPinRequired(e)) setPinFor(d); else toastError(e); }
     setBusy(null);
   }
   async function pair(d: DiscoveredNode, pin: string) {

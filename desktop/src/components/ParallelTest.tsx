@@ -7,6 +7,7 @@ import { useCluster } from "../store/cluster";
 import { chatErrorText, helperCancel, helperChat, onHelperStream, readyHelpers, streamChat, stripThink, trackGeneration } from "../lib/api";
 import { uid } from "../lib/format";
 import Markdown from "./Markdown";
+import ErrorBox from "./ErrorBox";
 
 type Status = "run" | "done" | "stopped" | "error";
 interface Col {
@@ -232,7 +233,7 @@ function Column({ c, fastest }: { c: Col; fastest: boolean }) {
       </div>
       <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-sm">
         {c.text ? <Markdown text={c.text} streaming={c.status === "run"} /> : c.status === "run" ? <span className="text-xs text-pl-dim">ждём первый токен…</span> : null}
-        {c.error && <div className="mt-1 text-xs text-pl-red">{c.error}</div>}
+        {c.error && <ErrorBox error={c.error} className="mt-1" />}
       </div>
     </div>
   );

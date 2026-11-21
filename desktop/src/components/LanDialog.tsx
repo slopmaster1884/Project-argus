@@ -4,6 +4,7 @@ import { useCluster } from "../store/cluster";
 import { addLanNode, isPinRequired, testLanNode } from "../lib/api";
 import { Copy, Stethoscope } from "lucide-react";
 import { useT } from "../lib/i18n";
+import ErrorBox from "./ErrorBox";
 
 const CMDS: { os: string; cmd: string }[] = [
   { os: "Linux / Pi (авто, с маяком)", cmd: "bash scripts/argus-node-linux.sh" },
@@ -33,7 +34,7 @@ export default function LanDialog() {
     setBusy("add"); setMsg(null);
     const p = pin.replace(/\D/g, "");
     try { await addLanNode(normalized, name.trim() || undefined, p || undefined); setOpen(false); }
-    catch (e) { setMsg({ ok: false, text: isPinRequired(e) ? t("sec.pinRequired") : String(e) }); }
+    catch (e) { setMsg({ ok: false, text: String(e) }); }
     setBusy(null);
   }
 
@@ -63,8 +64,9 @@ export default function LanDialog() {
             <span className="ml-2 text-2xs text-pl-dim">{t("sec.lanPinHint")}</span>
           </label>
           <div className="font-mono text-2xs text-pl-dim">порт по умолчанию 50052 · будет: {normalized || "—"}</div>
-          {msg && <div className={`border-l-2 p-2 font-mono text-2xs ${msg.ok ? "border-pl-green bg-pl-green/10 text-pl-green" : "border-pl-red bg-pl-red/10 text-pl-red"}`}>{msg.text}
-            {!msg.ok && <button className="btn ml-2 h-6 font-sans" onClick={() => setNetDiag({ address: normalized })}><Stethoscope size={11} /> {t("nd.button")}</button>}</div>}
+          {msg?.ok && <div className="border-l-2 border-pl-green bg-pl-green/10 p-2 font-mono text-2xs text-pl-green">{msg.text}</div>}
+          {msg && !msg.ok && <div><ErrorBox error={msg.text} />
+            {!isPinRequired(msg.text) && <button className="btn mt-1.5 h-6" onClick={() => setNetDiag({ address: normalized })}><Stethoscope size={11} /> {t("nd.button")}</button>}</div>}
 
           <div className="border border-pl-line bg-pl-bg0 p-3 text-xs leading-5 text-pl-mute">
             <div className="label mb-1">Как запустить ноду на Pi / ноутбуке</div>

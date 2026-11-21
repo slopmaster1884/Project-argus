@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useCluster } from "../store/cluster";
 import { gb } from "../lib/format";
 import type { NodeStage } from "../lib/types";
+import ErrorBox from "./ErrorBox";
 
 type Step = 0 | 1 | 2 | 3; // searching, connected, syncing, ready
 const STEPS = ["Searching", "Connected", "Syncing memory", "Ready"];
@@ -72,7 +73,7 @@ export default function UsbWizard() {
             ? <Msg title={`Authorize ${node.name}`} body="Unlock the device and tap Allow on “Allow USB debugging?”. Tick “Always allow from this computer”." tone="text-pl-orange" />
             : <Msg title="Waiting for a device" body="Connect an Android device by USB. Developer options → USB debugging must be enabled." />)}
           {(step === 1 || step === 2) && !err && <Msg title={node!.name} body={`Serial ${node!.id} · provisioning rpc-server node`} />}
-          {err && <Msg title="Provisioning failed" body={node?.error ?? ""} tone="text-pl-red" />}
+          {err && <ErrorBox error={node?.error || "Provisioning failed"} />}
           {step === 3 && node && <Msg title={`${node.name} online`} body={`+${gb(node.totalMb)} GB · cluster pool is now ${gb(snapshot!.totalMb)} GB`} tone="text-pl-green" />}
 
           <div className="mt-4 h-28 overflow-y-auto border border-pl-line bg-pl-bg0 p-2 font-mono text-2xs leading-5 text-pl-mute">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { KeyRound, Loader2, X } from "lucide-react";
 import { useT } from "../lib/i18n";
+import ErrorBox from "./ErrorBox";
 
 /** PIN prompt for adding a secured node (beacon `auth`, rpcauth.rs). `onSubmit` throws → the error is shown. */
 export default function PinDialog({ name, onSubmit, onClose }: { name: string; onSubmit: (pin: string) => Promise<void>; onClose: () => void }) {
@@ -29,7 +30,7 @@ export default function PinDialog({ name, onSubmit, onClose }: { name: string; o
               onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
               className="mt-1 h-10 w-full border border-pl-line2 bg-pl-bg0 px-2 text-center font-mono text-xl tracking-[0.3em] text-pl-text outline-none focus:border-pl-blue" />
           </label>
-          {err && <div className="border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{err}</div>}
+          {err && <ErrorBox error={err} />}
         </div>
         <div className="flex justify-end gap-2 border-t border-pl-line bg-pl-bg2 px-3 py-2">
           <button className="btn" onClick={onClose}>{t("sec.cancel")}</button>

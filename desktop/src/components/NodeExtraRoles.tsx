@@ -6,6 +6,7 @@ import { useCluster } from "../store/cluster";
 import { nodeRolesGet, nodesvcList, setNodeLibrary, setNodeVoice } from "../lib/api";
 import type { NodeRoleReport, NodeRolesView, NodeService, VoiceModelId } from "../lib/api";
 import type { ClusterNode } from "../lib/types";
+import { toastError } from "../lib/errors";
 
 const STATE_RU: Record<string, string> = {
   idle: "выключен", downloading: "получает модель", starting: "запускается", loading: "запускается", ready: "работает", error: "ошибка",
@@ -40,7 +41,7 @@ export default function NodeExtraRoles({ node }: { node: ClusterNode }) {
   if (!v) return null;
   const whisper = svc.find((s) => s.service === "whisper");
   const kiwix = svc.find((s) => s.service === "kiwix");
-  const err = (e: unknown) => pushToast("error", String(e));
+  const err = (e: unknown) => toastError(e);
 
   async function voice(on: boolean, model?: VoiceModelId, threads?: number) {
     try { await setNodeVoice(node.id, on, model, threads); load(); } catch (e) { err(e); }

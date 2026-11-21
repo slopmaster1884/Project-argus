@@ -1,6 +1,7 @@
 // «Знания»: поиск по своим файлам (индекс папки) и офлайн-библиотека (Kiwix: Википедия и др.).
 // Агент пользуется этим через инструменты search_files, wiki_search, wiki_read.
 import { useEffect, useState } from "react";
+import { toastError } from "../lib/errors";
 import { BookOpen, FolderSearch, Loader2, Search } from "lucide-react";
 import { useCluster } from "../store/cluster";
 import {
@@ -36,11 +37,11 @@ function FilesPanel() {
   }, []);
 
   async function index() {
-    try { setSt(await ragIndex(folder.trim(), url.trim() || null)); } catch (e) { pushToast("error", String(e)); }
+    try { setSt(await ragIndex(folder.trim(), url.trim() || null)); } catch (e) { toastError(e); }
   }
   async function search() {
     setSearching(true); setHits(null);
-    try { setHits(await ragSearch(query.trim(), 5)); } catch (e) { pushToast("error", String(e)); }
+    try { setHits(await ragSearch(query.trim(), 5)); } catch (e) { toastError(e); }
     setSearching(false);
   }
 
@@ -117,16 +118,16 @@ function LibraryPanel() {
   useEffect(() => { refresh(); }, []);
 
   async function saveUrl() {
-    try { await kiwixSetUrl(url.trim()); await refresh(); } catch (e) { pushToast("error", String(e)); }
+    try { await kiwixSetUrl(url.trim()); await refresh(); } catch (e) { toastError(e); }
   }
   async function search() {
     setBusy(true); setHits(null); setArticle(null);
-    try { setHits(await kiwixSearch(q.trim())); } catch (e) { pushToast("error", String(e)); }
+    try { setHits(await kiwixSearch(q.trim())); } catch (e) { toastError(e); }
     setBusy(false);
   }
   async function open(h: WikiHit) {
     setBusy(true);
-    try { setArticle({ title: h.title, text: await kiwixRead(h.path) }); } catch (e) { pushToast("error", String(e)); }
+    try { setArticle({ title: h.title, text: await kiwixRead(h.path) }); } catch (e) { toastError(e); }
     setBusy(false);
   }
 

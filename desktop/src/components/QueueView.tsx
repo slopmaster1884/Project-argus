@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { ListTodo, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { useCluster } from "../store/cluster";
 import { onQueueUpdate, queueAdd, queueList, queuePause, queueRemove, queueStart, type QueueJob, type QueueKind, type QueueState } from "../lib/api";
+import { toastError } from "../lib/errors";
 
 const KINDS: { id: QueueKind; label: string; hint: string }[] = [
   { id: "translate", label: "Перевести", hint: "каждый файл целиком на выбранный язык" },
@@ -31,7 +32,7 @@ export default function QueueView() {
     return () => off?.();
   }, []);
 
-  const act = (p: Promise<QueueState>) => p.then(setQ).catch((e) => pushToast("error", String(e)));
+  const act = (p: Promise<QueueState>) => p.then(setQ).catch((e) => toastError(e));
 
   async function add() {
     setBusy(true);
@@ -40,7 +41,7 @@ export default function QueueView() {
       setQ(await queueAdd({ kind, lang, prompt, inDir: inDir.trim(), outDir: outDir.trim(), startAt: at }));
       pushToast("ok", "Задание добавлено в очередь");
       setInDir(""); setOutDir("");
-    } catch (e) { pushToast("error", String(e)); }
+    } catch (e) { toastError(e); }
     setBusy(false);
   }
 

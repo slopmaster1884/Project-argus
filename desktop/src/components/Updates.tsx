@@ -5,6 +5,7 @@ import { useCluster } from "../store/cluster";
 import { checkUpdates, installUpdate, openExternal, setUpdateCheck, skipNodeUpdate, skipUpdateVersion, updateUsbNode } from "../lib/api";
 import Markdown from "./Markdown";
 import type { ClusterNode, UpdateStatus } from "../lib/types";
+import { toastError } from "../lib/errors";
 
 const mb = (b: number) => (b / 1048576).toFixed(1);
 const KIND: Record<UpdateStatus["installKind"], string> = {
@@ -108,7 +109,7 @@ export function NodeUpdateDialog({ node, version }: { node: ClusterNode; version
   async function go() {
     setBusy(true);
     try { await updateUsbNode(node.id); pushToast("info", `«${node.name}»: обновление ноды до ${version}…`); laterNode(key); }
-    catch (e) { pushToast("error", String(e)); }
+    catch (e) { toastError(e); }
     setBusy(false);
   }
   async function skip() {
@@ -154,7 +155,7 @@ export function AboutDialog() {
       if (s.available) { setAbout(false); setUpdateDialog(true); }   // manual check: ask even if skipped before
       else if (s.error) pushToast("warn", `Не удалось проверить: ${s.error}`);
       else pushToast("ok", `Установлена последняя версия (${s.current})`);
-    } catch (e) { pushToast("error", String(e)); }
+    } catch (e) { toastError(e); }
     setBusy(false);
   }
   async function toggle(on: boolean) {
