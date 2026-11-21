@@ -165,7 +165,7 @@ export function AboutDialog() {
   return (
     <Shell title="О программе" icon={<Info size={13} />} width={520} onClose={() => setAbout(false)}
       footer={<>
-        <button className="btn" onClick={() => openExternal("https://github.com/femboy1488/Project-argus/releases")}><ExternalLink size={12} /> Релизы на GitHub</button>
+        <button className="btn" onClick={() => openExternal("https://github.com/slopmaster1884/Project-argus/releases")}><ExternalLink size={12} /> Релизы на GitHub</button>
         <button className="btn-primary" disabled={busy} onClick={check}>{busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Проверить обновления</button>
       </>}>
       <div className="text-base font-medium text-pl-text">Argus Cluster {update?.current ?? snapshot?.appVersion ?? ""}</div>

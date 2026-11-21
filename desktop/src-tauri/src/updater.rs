@@ -22,8 +22,8 @@ use std::{path::{Path, PathBuf}, sync::{Arc, OnceLock}, time::{Duration, SystemT
 use tauri::{AppHandle, Emitter, State};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, time::{sleep, timeout}};
 
-pub const REPO: &str = "femboy1488/Project-argus";
-const LATEST_URL: &str = "https://api.github.com/repos/femboy1488/Project-argus/releases/latest";
+pub const REPO: &str = "slopmaster1884/Project-argus";
+const LATEST_URL: &str = "https://api.github.com/repos/slopmaster1884/Project-argus/releases/latest";
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 /// LAN HTTP port that serves the bundled node.apk to Wi-Fi nodes

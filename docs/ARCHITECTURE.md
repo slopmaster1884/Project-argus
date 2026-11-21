@@ -78,7 +78,7 @@ Rule: **nothing is installed without the user's click.** No «update automatical
 
 ### Desktop (`src-tauri/src/updater.rs`, UI `components/Updates.tsx`)
 - `updater::start`: 5 s after start and every 6 h, only if settings `checkUpdates` (UI «Проверять обновления», default on):
-  `GET https://api.github.com/repos/femboy1488/Project-argus/releases/latest` (User-Agent `Argus-Cluster/<ver>`, 10 s
+  `GET https://api.github.com/repos/slopmaster1884/Project-argus/releases/latest` (User-Agent `Argus-Cluster/<ver>`, 10 s
   timeout, errors only logged). `tag_name` must be `vX.Y[.Z]` (pre-release suffix ignored); anything else (e.g. the old
   `V2` release) is not a version and never offered. Newer than `CARGO_PKG_VERSION` ⇒ event `update-available`.
 - UI dialog «Доступна версия X. Хотите обновить?» + release notes (markdown): **Обновить / Позже / Пропустить эту версию**.

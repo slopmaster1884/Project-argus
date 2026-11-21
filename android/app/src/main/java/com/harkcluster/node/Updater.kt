@@ -36,7 +36,7 @@ object Updater {
     private const val CHANNEL = "update"
     private const val NOTIF_ID = 2
     const val EXTRA_SHOW = "show_update"
-    private const val GITHUB_LATEST = "https://api.github.com/repos/femboy1488/Project-argus/releases/latest"
+    private const val GITHUB_LATEST = "https://api.github.com/repos/slopmaster1884/Project-argus/releases/latest"
     private const val PREF_SKIP = "skip_update_vc"
     private const val PREF_SKIP_VN = "skip_update_vn"
     const val PREF_RUN_AFTER = "run_after_update"

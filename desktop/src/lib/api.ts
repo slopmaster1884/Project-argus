@@ -89,7 +89,7 @@ export async function onUpdateProgress(cb: (p: UpdateProgress) => void): Promise
 const mockUpdate = (): UpdateStatus => ({
   current: "0.3.1", installKind: "nsis", available: true, skipped: false, checkEnabled: true, checking: false,
   lastCheck: Math.floor(Date.now() / 1000), error: null, busy: false, phase: "", done: 0, total: 0, nodeServerError: "",
-  latest: { version: "0.3.2", tag: "v0.3.2", name: "Argus 0.3.2", url: "https://github.com/femboy1488/Project-argus/releases",
+  latest: { version: "0.3.2", tag: "v0.3.2", name: "Argus 0.3.2", url: "https://github.com/slopmaster1884/Project-argus/releases",
     publishedAt: new Date().toISOString(), hasSums: true, asset: { name: "Argus-Setup.exe", url: "", size: 46_000_000 },
     notes: "## Что нового\n- Пример заметок к релизу\n- **markdown** поддерживается" },
 });
