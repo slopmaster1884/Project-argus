@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import clsx from "clsx";
@@ -7,7 +8,7 @@ import type { NodeStage } from "../lib/types";
 import ErrorBox from "./ErrorBox";
 
 type Step = 0 | 1 | 2 | 3; // searching, connected, syncing, ready
-const STEPS = ["Searching", "Connected", "Syncing memory", "Ready"];
+const STEPS = [tr("Поиск", "Searching"), tr("Подключено", "Connected"), tr("Память", "Syncing memory"), tr("Готово", "Ready")];
 
 const stepOf = (s?: NodeStage): Step =>
   s === "offline" ? 0 :
@@ -51,7 +52,7 @@ export default function UsbWizard() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="max-h-[92vh] w-[600px] max-w-[calc(100vw-2rem)] overflow-y-auto border border-pl-line2 bg-pl-bg1 shadow-2xl">
         <div className="flex h-9 items-center justify-between border-b border-pl-line bg-pl-bg2 px-3">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-pl-mute">Add node · USB</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-pl-mute">{tr("Добавить ноду · USB", "Add node · USB")}</span>
           <button onClick={() => setWizard(false)} className="text-pl-dim hover:text-pl-text"><X size={15} /></button>
         </div>
 
@@ -71,7 +72,7 @@ export default function UsbWizard() {
         <div className="p-5">
           {step === 0 && (node?.stage === "unauthorized"
             ? <Msg title={`Authorize ${node.name}`} body="Unlock the device and tap Allow on “Allow USB debugging?”. Tick “Always allow from this computer”." tone="text-pl-orange" />
-            : <Msg title="Waiting for a device" body="Connect an Android device by USB. Developer options → USB debugging must be enabled." />)}
+            : <Msg title={tr("Ждём устройство", "Waiting for a device")} body={tr("Подключите Android-телефон кабелем. Нужна включённая «Отладка по USB» в параметрах разработчика.", "Connect an Android device by USB. Developer options → USB debugging must be enabled.")} />)}
           {(step === 1 || step === 2) && !err && <Msg title={node!.name} body={`Serial ${node!.id} · provisioning rpc-server node`} />}
           {err && <ErrorBox error={node?.error || "Provisioning failed"} />}
           {step === 3 && node && <Msg title={`${node.name} online`} body={`+${gb(node.totalMb)} GB · cluster pool is now ${gb(snapshot!.totalMb)} GB`} tone="text-pl-green" />}
@@ -82,8 +83,8 @@ export default function UsbWizard() {
         </div>
 
         <div className="flex justify-end gap-2 border-t border-pl-line bg-pl-bg2 px-3 py-2">
-          <button className="btn" onClick={() => setWizard(false)}>{step === 3 ? "Close" : "Cancel"}</button>
-          {step === 3 && <button className="btn-primary" onClick={() => setWizard(false)}>Done</button>}
+          <button className="btn" onClick={() => setWizard(false)}>{step === 3 ? "Close" : tr("Отмена", "Cancel")}</button>
+          {step === 3 && <button className="btn-primary" onClick={() => setWizard(false)}>{tr("Готово", "Done")}</button>}
         </div>
       </div>
     </div>

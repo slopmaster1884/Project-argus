@@ -75,6 +75,8 @@ curl -fsSL https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/s
 
 Нет в списке? Нажми **«Добавить ноду по IP»** и введи адрес, который показал скрипт, с портом: например `192.168.1.23:50052`.
 
+<img src="screens/add-node-ip.jpg" width="640" alt="Добавить ноду по IP"/>
+
 Как узнать IP второго компьютера вручную:
 - **Windows:** Win + R → `cmd` → `ipconfig` → строка «IPv4-адрес» у адаптера Wi-Fi или Ethernet.
 - **Linux:** `hostname -I` → первое число вида `192.168.x.x`.
@@ -82,6 +84,10 @@ curl -fsSL https://raw.githubusercontent.com/slopmaster1884/Project-argus/main/s
 ---
 
 ## Если не работает
+
+Сначала нажми **Кластер → «Проверить связь»**: Argus сам проверит сеть, порт, файрвол и версию и подскажет, что исправить.
+
+<img src="screens/netdiag.jpg" width="640" alt="Проверить связь"/>
 
 | Что видишь | В чём дело и что делать |
 |---|---|

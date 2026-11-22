@@ -4,16 +4,16 @@
 
 **Run a local LLM on your GPU plus the old phones in your drawer.**
 
-![version](https://img.shields.io/badge/version-0.3.4-00e5ff)
+![version](https://img.shields.io/badge/version-0.4_(v2)-00e676)
 ![platform](https://img.shields.io/badge/Windows_·_Linux_·_Android-7c4dff)
 ![engine](https://img.shields.io/badge/engine-llama.cpp-ff4081)
 ![license](https://img.shields.io/badge/free-open_source-00e676)
 
-[Download](../../releases) · [Quick start](#quick-start) · [Linux](#linux) · [Second PC](#second-pc--laptop-as-a-node) · [Support](SUPPORT.md) · [Русский](README.md)
+[Download](../../releases) · [Quick start](#quick-start) · [Linux](#linux) · [Second PC](#second-pc--laptop-as-a-node) · [Speed](#is-it-fast) · [Your own model](#your-own-model) · [What's new](#whats-new-in-v2-04) · [Support](SUPPORT.md) · [Русский](README.md)
 
 **Built by one person on a GTX 960. If it's useful to you, [chip in for test hardware](SUPPORT.md) ❤️**
 
-![Argus](docs/screens/v2-devices.jpg)
+![Argus](docs/screens/cluster.jpg)
 
 </div>
 
@@ -45,6 +45,34 @@ Argus benchmarks each device on connect (speed and free memory) and hands out la
 - Phones as helpers: a small model for titles and summaries, voice input (whisper.cpp), offline Wikipedia (Kiwix .zim) as a tool for the model.
 - Chat from any phone on your home network via QR code (PIN-protected), image input, RAG over your folders, overnight queue, Telegram bot.
 - Never updates itself silently: every update (PC or phone) asks first and is checked against SHA-256.
+
+<table>
+<tr>
+<td><img src="docs/screens/chat-markdown.jpg" alt="Chat"/><br/><sub>Chat: code, tables, live speed</sub></td>
+<td><img src="docs/screens/agent.jpg" alt="Agent"/><br/><sub>Agent works on your PC, every step visible</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screens/models.jpg" alt="Models"/><br/><sub>Models: what fits your pool</sub></td>
+<td><img src="docs/screens/models-hf.jpg" alt="Hugging Face"/><br/><sub>Any GGUF model from Hugging Face</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screens/themes.jpg" alt="Themes"/><br/><sub>Four themes: green, pink, black, black &amp; white</sub></td>
+<td><img src="docs/screens/appearance.jpg" alt="Appearance"/><br/><sub>Appearance: theme, glass, background, animations</sub></td>
+</tr>
+</table>
+
+## What's new in v2 (0.4)
+
+- **New design.** Four themes (green by default, pink, black, black & white), translucent glass, background and animations on start and on incidents. Palette button at the top.
+- **Linux done properly.** AppImage and .deb in releases, plus a [step-by-step tutorial](docs/LINUX.en.md) for first-time terminal users.
+- **Second PC in one command.** Windows and Linux become nodes with a script and show up under "Found on network". See [docs/PC-NODE.en.md](docs/PC-NODE.en.md).
+- **"Check connection".** When a node won't connect, Argus walks through network, port, firewall and version and tells you what to fix.
+- **Secured mode.** Lock a node with a PIN so only paired PCs can connect. [docs/SECURITY.en.md](docs/SECURITY.en.md).
+- **First-run wizard.** Language, devices, first model in five steps.
+- **Node roles.** Helper by default answers short questions, the main model takes the heavy ones; new Search role. [docs/ROLES.en.md](docs/ROLES.en.md).
+- **Raspberry Pi image.** Flash, power on, the Pi joins the cluster. [docs/RASPBERRY-PI.en.md](docs/RASPBERRY-PI.en.md).
+- **Updates only from this repository** (the old build looked at a previous address).
+- Full English UI and docs.
 
 ## Quick start
 
@@ -104,7 +132,28 @@ So: use Wi-Fi and tethering modes only on your own home network, and never expos
 
 ## Is it fast?
 
-One big GPU is faster. The point is running models that didn't fit at all before. Phones get warm: take them out of the case and cap charging at 85% if your phone supports it.
+Generation speed, roughly. It depends on your phones, cables and Wi-Fi, so Argus shows its own "≈N tok/s" estimate for your setup before launch.
+
+| Hardware | Model | Speed |
+|---|---|---|
+| GTX 960 4 GB + phones over USB tethering | Gemma 2 2B | ~36 tok/s (measured) |
+| same, over adb | Gemma 2 2B | ~16 tok/s (measured) |
+| GTX 960 + a fast phone | Qwen3 4B | ~14 tok/s (measured) |
+| GTX 960 + 3 phones, ~14 GB pool | Qwen3 8B | ~7 tok/s (app estimate) |
+
+Fastest is a model that fits entirely in the GPU: then Argus leaves the phones alone. USB tethering is about 2× faster than adb, Wi-Fi is slower than a cable, and Q4_0 runs faster on phones than Q4_K_M. Phones get warm: take them out of the case and cap charging at 85% if your phone supports it.
+
+Got your own numbers? "Share results" on the Cluster tab builds a table without serial numbers. Post it in Issues and I'll add it here.
+
+## Your own model
+
+Any GGUF model that llama.cpp b12008 supports works.
+
+1. **Models → Hugging Face**, type a name (e.g. `qwen3` or `gemma`).
+2. Expand a repository and pick a quant file. The Fit column tells you right away whether your cluster has enough memory.
+3. Press **Deploy**: Argus downloads the file once and spreads the layers across your devices.
+
+Tips: Q4_0 or Q4_K_M for phones; the agent needs a model tagged tools and the 64K context preset.
 
 ## For developers
 

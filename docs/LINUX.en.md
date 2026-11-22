@@ -90,6 +90,10 @@ Then **unplug and plug the phone cable back in**. If Argus says "no permissions"
 
 ### Step 4. Start
 
+On first launch a wizard opens: language, devices, first model.
+
+<img src="screens/first-run.jpg" width="640" alt="First-run wizard"/>
+
 Find **Argus** in the app menu → click **"Pick a model and start"** → wait for the "Ready" status → chat. From here on it's the same as on Windows: [README](../README.en.md#quick-start).
 
 ---
@@ -165,9 +169,17 @@ Open the port by hand:
 | Fedora (firewalld) | `sudo firewall-cmd --permanent --add-port=50052/tcp && sudo firewall-cmd --reload` |
 | Arch | usually no firewall, skip this |
 
+
+If the node runs in secured mode (`ARGUS_SECURE=1`), also enter the PIN it shows.
+
+<img src="screens/add-node-ip.jpg" width="640" alt="Add node by IP"/>
 ---
 
 ## C. Troubleshooting
+
+First, in Argus press **Cluster → "Check connection"** and enter the node address. Argus checks network, port, firewall and version step by step and tells you exactly what to fix.
+
+<img src="screens/netdiag.jpg" width="640" alt="Check connection"/>
 
 | What you see | What to do |
 |---|---|
@@ -187,4 +199,4 @@ Still stuck? Open an [Issue](https://github.com/slopmaster1884/Project-argus/iss
 
 ## ⚠ Security
 
-The node listens on port 50052 without a password. Run it **only at home**, not in a cafe, dorm or office, and never forward ports 50052/50053 to the internet.
+The node listens on port 50052 without a password unless secured mode with a PIN is on (`ARGUS_SECURE=1`, see [SECURITY.en.md](SECURITY.en.md)). Run it **only at home**, not in a cafe, dorm or office, and never forward ports 50052/50053 to the internet.
