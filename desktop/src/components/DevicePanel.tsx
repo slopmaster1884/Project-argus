@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Columns3, Cpu, FlaskConical, Gauge, Loader2, Share2, Thermometer, PanelRight, Plug, Plus, Radar, RefreshCw, RotateCw, ShieldAlert, Stethoscope, Trash2, Usb, Wifi } from "lucide-react";
-import { useT } from "../lib/i18n";
+import { useT, tr } from "../lib/i18n";
 import clsx from "clsx";
 import { useCluster } from "../store/cluster";
 import {
@@ -23,14 +23,14 @@ import { toastError } from "../lib/errors";
 import ErrorBox from "./ErrorBox";
 
 export const stageTag: Record<NodeStage, [string, string]> = {
-  connected: ["ONLINE", "border-pl-green/50 text-pl-green"],
+  connected: [tr("В СЕТИ", "ONLINE"), "border-pl-green/50 text-pl-green"],
   unauthorized: ["AUTH REQUIRED", "border-pl-orange/50 text-pl-orange animate-blink"],
   installing: ["INSTALLING", "border-pl-blue/50 text-pl-blue animate-blink"],
   updating: ["UPDATING", "border-pl-blue/50 text-pl-blue animate-blink"],
   forwarding: ["FORWARDING", "border-pl-blue/50 text-pl-blue animate-blink"],
   starting: ["STARTING", "border-pl-blue/50 text-pl-blue animate-blink"],
   syncing: ["SYNCING", "border-pl-blue/50 text-pl-blue animate-blink"],
-  offline: ["OFFLINE", "border-pl-line2 text-pl-dim"],
+  offline: [tr("НЕ В СЕТИ", "OFFLINE"), "border-pl-line2 text-pl-dim"],
   error: ["FAULT", "border-pl-red/50 text-pl-red"],
 };
 
@@ -104,9 +104,9 @@ export default function DevicePanel() {
         <MemoryPool />
         <div className="panel">
           <div className="panel-head h-auto min-h-8 flex-wrap gap-x-3 gap-y-1 py-1">
-            <span>Topology</span>
+            <span>{tr("Топология", "Topology")}</span>
             <div className="ml-auto flex flex-wrap justify-end gap-1.5 normal-case tracking-normal">
-              <button className="btn" title="Повторить подготовку упавших устройств, перезапустить adb при сбое" onClick={() => rescan()}><RefreshCw size={12} /> Rescan</button>
+              <button className="btn" title="Повторить подготовку упавших устройств, перезапустить adb при сбое" onClick={() => rescan()}><RefreshCw size={12} /> {tr("Обновить", "Rescan")}</button>
               {snapshot.engine.canRestart && (
                 <button className="btn" disabled={restarting} title="Перезапустить llama-server с текущим набором нод"
                   onClick={async () => { setRestarting(true); try { await restartEngine(); pushToast("info", "Движок перезапускается…"); } catch (e) { toastError(e); } setRestarting(false); }}>
@@ -115,7 +115,7 @@ export default function DevicePanel() {
               )}
               <button className="btn" data-tour="lan" onClick={() => setLanDialog(true)}><Wifi size={12} /> Добавить ноду по IP</button>
               <button className="btn" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address: "" })}><Stethoscope size={12} /> {t("nd.button")}</button>
-              <button className="btn-primary" data-tour="usb" onClick={() => setWizard(true)}><Usb size={12} /> Connect via USB</button>
+              <button className="btn-primary" data-tour="usb" onClick={() => setWizard(true)}><Usb size={12} /> {tr("Подключить по USB", "Connect via USB")}</button>
               {!wide && <button className="btn" title="Inspector: свойства выбранного устройства" onClick={() => setInsp(true)}><PanelRight size={12} /> Inspector</button>}
             </div>
           </div>
@@ -125,7 +125,7 @@ export default function DevicePanel() {
         <RolesPanel snap={snapshot} />
         <DiscoveredPanel snap={snapshot} />
       </div>
-      <Drawer wide={wide} open={insp} onClose={() => setInsp(false)} title="Inspector" width={320}>
+      <Drawer wide={wide} open={insp} onClose={() => setInsp(false)} title={tr("Инспектор", "Inspector")} width={320}>
         <Inspector node={current} snap={snapshot} />
       </Drawer>
     </div>
@@ -179,9 +179,9 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
   const cpuLayers = plan?.cpuLayers;
   return (
     <div className="panel">
-      <div className="panel-head gap-3"><span className="shrink-0">Nodes</span>
+      <div className="panel-head gap-3"><span className="shrink-0">{tr("Ноды", "Nodes")}</span>
         <span className="min-w-0 truncate font-mono normal-case tracking-normal text-pl-dim">
-          {nodes.length} objects<span className="hidden xl:inline"> · быстрые устройства заполняются первыми</span>
+          {nodes.length} {tr("шт.", "objects")}<span className="hidden xl:inline"> · быстрые устройства заполняются первыми</span>
           {snap.estTps != null && <span className="ml-2 text-pl-gold" title="Грубая оценка по скорости и RTT нод для последней модели">≈ {fmtTps(snap.estTps)} ток/с</span>}
           {snap.needMb != null && !snap.fits && <span className="ml-2 text-pl-red">модель не помещается</span>}
         </span>
@@ -191,7 +191,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
       <table className="w-full min-w-[1000px] text-xs">
         <thead>
           <tr className="border-b border-pl-line text-left">
-            {["Node", "Link", "Status", "Endpoint / device", "Memory", "Allocatable", "Скорость", "RTT", "Роль", "Split", "Load"].map((h) =>
+            {[tr("Нода", "Node"), tr("Связь", "Link"), tr("Статус", "Status"), tr("Адрес / устройство", "Endpoint / device"), tr("Память", "Memory"), tr("Доступно", "Allocatable"), "Скорость", "RTT", "Роль", tr("Доля", "Split"), tr("Нагрузка", "Load")].map((h) =>
               <th key={h} className="label whitespace-nowrap px-3 py-1.5 font-semibold">{h}</th>)}
           </tr>
         </thead>
@@ -272,29 +272,29 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
   useEffect(() => setW(node.weight), [node.id, node.weight]);
   const isHostAgg = node.id === "host";
   const rows: [string, string][] = [
-    ["Object ID", node.id], ["Class", node.transport === "local" ? (node.kind === "gpu" ? "Local GPU" : "Host") : "RPC Node"],
-    ["Device type", node.integrated ? "integrated gpu" : node.kind],
-    ["Transport", node.transport === "local" ? `local${node.device ? ` (${node.device})` : ""}` : node.transport === "lan" ? "LAN · TCP" : node.link === "tether" ? "USB-модем · TCP" : "USB · adb forward"],
-    ["Endpoint", node.endpoint ?? "—"], ["Version", node.version ?? (node.transport === "usb" ? "—" : "b12008")],
-    ["Total memory", `${gb(node.totalMb, 2)} GB`], ["Free now", `${gb(node.availableMb, 2)} GB`],
-    ["Allocatable", `${gb(node.usableMb, 2)} GB`], ["Load", `${node.loadPct.toFixed(1)} %`],
+    [tr("ID", "Object ID"), node.id], [tr("Класс", "Class"), node.transport === "local" ? (node.kind === "gpu" ? tr("Видеокарта ПК", "Local GPU") : tr("Этот ПК", "Host")) : "RPC Node"],
+    [tr("Тип устройства", "Device type"), node.integrated ? "integrated gpu" : node.kind],
+    [tr("Подключение", "Transport"), node.transport === "local" ? `local${node.device ? ` (${node.device})` : ""}` : node.transport === "lan" ? "LAN · TCP" : node.link === "tether" ? "USB-модем · TCP" : "USB · adb forward"],
+    [tr("Адрес", "Endpoint"), node.endpoint ?? "—"], [tr("Версия", "Version"), node.version ?? (node.transport === "usb" ? "—" : "b12008")],
+    [tr("Всего памяти", "Total memory"), `${gb(node.totalMb, 2)} GB`], [tr("Свободно сейчас", "Free now"), `${gb(node.availableMb, 2)} GB`],
+    [tr("Доступно", "Allocatable"), `${gb(node.usableMb, 2)} GB`], [tr("Нагрузка", "Load"), `${node.loadPct.toFixed(1)} %`],
   ];
-  if (node.transport === "usb" && node.version && node.version !== snap.bundledNodeVersion) rows.push(["Bundled node", snap.bundledNodeVersion]);
-  if (node.transport === "lan") rows.push(["Discovery", node.beacon ? "Wi-Fi маяк (UDP 50053)" : "вручную по IP"]);
+  if (node.transport === "usb" && node.version && node.version !== snap.bundledNodeVersion) rows.push([tr("Нода в комплекте", "Bundled node"), snap.bundledNodeVersion]);
+  if (node.transport === "lan") rows.push([tr("Обнаружение", "Discovery"), node.beacon ? "Wi-Fi маяк (UDP 50053)" : "вручную по IP"]);
   if (node.transport === "lan" && node.appVersion) rows.push(["Argus Node", `${node.appVersion}${node.appVc != null ? ` (${node.appVc})` : ""}`]);
   if (node.updateAvailable) rows.push(["Доступна нода", node.updateAvailable]);
   if (node.variant) rows.push(["rpc-server build", node.variant]);
-  if (node.transport !== "local") rows.push(["In running model", node.inEngine ? "да" : "нет"]);
-  if (node.attempts > 0) rows.push(["Failed attempts", String(node.attempts)]);
+  if (node.transport !== "local") rows.push([tr("В запущенной модели", "In running model"), node.inEngine ? "да" : "нет"]);
+  if (node.attempts > 0) rows.push([tr("Неудачных попыток", "Failed attempts"), String(node.attempts)]);
   if (node.speed > 0) rows.push(["Скорость", `${node.speed.toFixed(1)} ГБ/с · ${node.speedMeasured ? "замер" : "оценка"}`]);
   if (node.rttMs != null) rows.push(["RTT", `${node.rttMs.toFixed(1)} мс`]);
   if (node.tempC != null) rows.push(["Температура", `${node.tempC.toFixed(0)} °C${node.throttled ? " · греется, сбавляет скорость" : ""}`]);
   if (node.transport !== "local" && node.assigned) rows.push(["Сейчас", node.assigned === "model" ? "часть модели" : node.assigned === "free" ? "свободна" : node.assigned === "helper" ? "помощник" : "выключена / не в сети"]);
   return (
     <aside className="flex flex-col overflow-y-auto bg-pl-bg1">
-      <div className="panel-head border-t-0"><span>Inspector</span></div>
+      <div className="panel-head border-t-0"><span>{tr("Инспектор", "Inspector")}</span></div>
       <div className="border-b border-pl-line p-4">
-        <div className="label">Selected object</div>
+        <div className="label">{tr("Выбрано", "Selected object")}</div>
         <div className="mt-1 truncate text-sm font-medium text-pl-text" title={node.name}>{node.name}</div>
         <div className="mt-2 flex flex-wrap gap-1.5"><span className={clsx("tag border", c)}>{t}</span><TransportBadge n={node} /></div>
       </div>
@@ -335,7 +335,7 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
       {node.error && <ErrorBox error={node.error} className="m-4" />}
       <div className="mt-auto border-t border-pl-line p-4 font-mono text-2xs leading-5 text-pl-dim">
         {node.transport === "local"
-          ? "llama-server runs here and drives every RPC node."
+          ? tr("Здесь работает llama-server и управляет всеми RPC-нодами.", "llama-server runs here and drives every RPC node.")
           : node.transport === "lan"
             ? "rpc-server в сети: без пароля и шифрования — только закрытая домашняя сеть."
             : node.link === "tether"
