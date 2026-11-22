@@ -110,7 +110,7 @@ export default function ModelLibrary() {
                     const isBest = best?.id === b.id;
                     return (
                       <tr key={m.id} onClick={() => { setPreviewId(b.id); if (!wide && tab === "curated") setSide(true); }} title="Показать план распределения справа"
-                        className={clsx("cursor-pointer border-b border-pl-line", preview && baseOf(preview).id === b.id && !active && "outline outline-1 -outline-offset-1 outline-pl-blue/60", active ? "bg-pl-blue2/20" : isBest ? "bg-pl-gold/[0.07]" : "odd:bg-pl-bg1 even:bg-[#20252c] hover:bg-pl-bg3",
+                        className={clsx("cursor-pointer border-b border-pl-line", preview && baseOf(preview).id === b.id && !active && "outline outline-1 -outline-offset-1 outline-pl-blue/60", active ? "bg-pl-blue2/20" : isBest ? "bg-pl-gold/[0.07]" : "odd:bg-pl-bg1 even:bg-pl-bg2 hover:bg-pl-bg3",
                         fit === "too-heavy" && "text-pl-dim", isBest && "shadow-[inset_2px_0_0_#FBD065]")}>
                         <td className="px-3 py-2 font-sans text-pl-text">
                           <div className="flex flex-wrap items-center gap-1.5">{isBest && <Star size={11} className="shrink-0 fill-pl-gold text-pl-gold" />}<span className="whitespace-nowrap">{m.name}</span>

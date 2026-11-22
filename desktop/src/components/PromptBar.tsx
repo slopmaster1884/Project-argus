@@ -120,7 +120,7 @@ export default function PromptBar({ onSend, onStop, busy, disabled, placeholder,
   return (
     <div className="border-t border-pl-line bg-pl-bg1 p-3"
       onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); attach(e.dataTransfer.files); }}>
-      <div className="mx-auto max-w-4xl border border-pl-line2 bg-pl-bg0 focus-within:border-pl-blue focus-within:shadow-[0_0_0_1px_#4C90F0]">
+      <div className="mx-auto max-w-4xl border border-pl-line2 bg-pl-bg0 focus-within:border-pl-blue focus-within:shadow-[0_0_0_1px_rgb(var(--pl-blue)),0_0_24px_-6px_rgb(var(--accent-glow)/.6)]">
         {(files.length > 0 || images.length > 0 || err) && (
           <div className="flex flex-wrap items-center gap-1.5 border-b border-pl-line px-2 py-1.5">
             {images.map((im) => (

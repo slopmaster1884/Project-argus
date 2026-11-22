@@ -186,7 +186,7 @@ export function AboutDialog() {
       {update?.nodeServerError && <div className="mt-2 font-mono text-2xs text-pl-orange">{update.nodeServerError}</div>}
       <label className="mt-4 flex cursor-pointer items-center justify-between text-xs">
         <span className="text-pl-text">Проверять обновления <span className="text-pl-dim">(при запуске и каждые 6 ч)</span></span>
-        <input type="checkbox" className="accent-[#2D72D2]" checked={update?.checkEnabled ?? true} onChange={(e) => toggle(e.target.checked)} />
+        <input type="checkbox" className="accent-[rgb(var(--pl-blue2))]" checked={update?.checkEnabled ?? true} onChange={(e) => toggle(e.target.checked)} />
       </label>
       <p className="mt-2 text-2xs leading-4 text-pl-dim">
         Argus никогда не обновляется сам: при новой версии он спросит «Обновить / Позже / Пропустить эту версию». То же для нод:

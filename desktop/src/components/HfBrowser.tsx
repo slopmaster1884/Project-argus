@@ -78,7 +78,7 @@ function Row({ m, open, toggle }: { m: HfModel; open: boolean; toggle: () => voi
   const moe = m.tags?.includes("moe") || /A\d+B/.test(m.id);
   return (
     <>
-      <tr onClick={toggle} className={clsx("cursor-pointer border-b border-pl-line", open ? "bg-pl-blue2/15" : "odd:bg-pl-bg1 even:bg-[#20252c] hover:bg-pl-bg3")}>
+      <tr onClick={toggle} className={clsx("cursor-pointer border-b border-pl-line", open ? "bg-pl-blue2/15" : "odd:bg-pl-bg1 even:bg-pl-bg2 hover:bg-pl-bg3")}>
         <td className="px-3 py-2">
           <div className="flex items-center gap-1.5">
             <ChevronRight size={12} className={clsx("text-pl-dim transition", open && "rotate-90")} />

@@ -203,7 +203,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
             return (
               <tr key={n.id} onClick={() => onSel(n.id)}
                 className={clsx("cursor-pointer border-b border-pl-line last:border-0",
-                  sel === n.id ? "bg-pl-blue2/20" : "odd:bg-pl-bg1 even:bg-[#20252c] hover:bg-pl-bg3", !n.enabled && "opacity-50")}>
+                  sel === n.id ? "bg-pl-blue2/20" : "odd:bg-pl-bg1 even:bg-pl-bg2 hover:bg-pl-bg3", !n.enabled && "opacity-50")}>
                 <td className="max-w-[180px] px-3 py-2 font-sans text-pl-text" title={n.name}>{n.name}{!n.enabled && <span className="ml-1.5 text-2xs text-pl-dim">(выкл)</span>}</td>
                 <td className="px-3 py-2"><TransportBadge n={n} /></td>
                 <td className="min-w-[150px] px-3 py-2">
@@ -312,7 +312,7 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
           {node.helper && <HelperLine h={node.helper} />}
           <label className="flex cursor-pointer items-center justify-between">
             <span className="text-pl-text">Использовать в кластере</span>
-            <input type="checkbox" className="accent-[#2D72D2]" checked={node.enabled} onChange={(e) => setNodeEnabled(node.id, e.target.checked)} />
+            <input type="checkbox" className="accent-[rgb(var(--pl-blue2))]" checked={node.enabled} onChange={(e) => setNodeEnabled(node.id, e.target.checked)} />
           </label>
           <div>
             <div className="flex justify-between"><span className="text-pl-text">Поправка скорости</span><span className="font-mono text-pl-gold">×{w.toFixed(2)}</span></div>
@@ -605,7 +605,7 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
       <div className="panel-head">
         <span className="flex items-center gap-1.5"><Radar size={12} /> Найдено в сети</span>
         <label className="flex shrink-0 cursor-pointer items-center gap-2 font-mono normal-case tracking-normal text-pl-mute" title="Добавлять найденные ноды без подтверждения">
-          <input type="checkbox" className="accent-[#2D72D2]" checked={snap.autoAddDiscovered} onChange={(e) => setAutoAdd(e.target.checked)} /> автодобавление
+          <input type="checkbox" className="accent-[rgb(var(--pl-blue2))]" checked={snap.autoAddDiscovered} onChange={(e) => setAutoAdd(e.target.checked)} /> автодобавление
         </label>
       </div>
       {snap.beaconError && <div className="border-b border-pl-line bg-pl-red/10 px-3 py-1.5 font-mono text-2xs text-pl-red">{snap.beaconError}</div>}
@@ -623,7 +623,7 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
           </tr></thead>
           <tbody className="whitespace-nowrap font-mono">
             {list.map((d) => (
-              <tr key={d.id} className="border-b border-pl-line last:border-0 odd:bg-pl-bg1 even:bg-[#20252c]">
+              <tr key={d.id} className="border-b border-pl-line last:border-0 odd:bg-pl-bg1 even:bg-pl-bg2">
                 <td className="max-w-[200px] truncate px-3 py-2 font-sans text-pl-text" title={d.name}>
                   {d.name}
                   {d.auth && <span title={t("sec.foundHint")} className="ml-1.5 tag border border-pl-green/50 text-pl-green">{t("sec.found")}</span>}

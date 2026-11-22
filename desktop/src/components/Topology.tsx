@@ -18,16 +18,16 @@ export default function Topology({ selected, onSelect }: { selected: string; onS
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
       <defs>
-        <pattern id="g" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#2F343C" /></pattern>
+        <pattern id="g" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="rgb(var(--pl-line))" /></pattern>
       </defs>
       <rect width={W} height={H} fill="url(#g)" />
       {nodes.map((n, i) => {
         const on = n.stage === "connected";
         return (
           <g key={`l-${n.id}`}>
-            <line x1={cx} y1={cy} x2={pos[i].x} y2={pos[i].y} stroke={!n.enabled ? "#404854" : on ? (n.transport === "lan" ? "#68C1EE" : "#4C90F0") : "#EC9A3C"} strokeWidth={1.2}
+            <line x1={cx} y1={cy} x2={pos[i].x} y2={pos[i].y} stroke={!n.enabled ? "rgb(var(--pl-line2))" : on ? (n.transport === "lan" ? "rgb(var(--pl-cyan))" : "rgb(var(--pl-blue))") : "rgb(var(--pl-orange))"} strokeWidth={1.2}
               strokeDasharray={on && n.transport !== "lan" ? "0" : n.transport === "lan" && on ? "6 3" : "4 4"} opacity={0.8} />
-            {on && <circle r="2.5" fill="#68C1EE">
+            {on && <circle r="2.5" fill="rgb(var(--pl-cyan))">
               <animateMotion dur="1.8s" repeatCount="indefinite" path={`M${cx},${cy} L${pos[i].x},${pos[i].y}`} />
             </circle>}
             <text x={(cx + pos[i].x) / 2} y={(cy + pos[i].y) / 2 - 6} textAnchor="middle" className="fill-pl-dim font-mono" fontSize="9">
@@ -55,14 +55,14 @@ function Glyph({ node, x, y, color, big, sel, onClick, sub }: {
   const on = node.stage === "connected" && node.enabled;
   return (
     <g transform={`translate(${x},${y})`} onClick={onClick} className="cursor-pointer">
-      {sel && <rect x={-s - 5} y={-s - 5} width={(s + 5) * 2} height={(s + 5) * 2} fill="none" stroke="#4C90F0" strokeDasharray="3 3" />}
-      <rect x={-s} y={-s} width={s * 2} height={s * 2} fill="#1C2127" stroke={on ? color : "#EC9A3C"} strokeWidth={1.5} />
-      <rect x={-s} y={-s} width={s * 2} height={3} fill={on ? color : "#EC9A3C"} />
+      {sel && <rect x={-s - 5} y={-s - 5} width={(s + 5) * 2} height={(s + 5) * 2} fill="none" stroke="rgb(var(--pl-blue))" strokeDasharray="3 3" />}
+      <rect x={-s} y={-s} width={s * 2} height={s * 2} fill="rgb(var(--pl-bg1))" stroke={on ? color : "rgb(var(--pl-orange))"} strokeWidth={1.5} />
+      <rect x={-s} y={-s} width={s * 2} height={3} fill={on ? color : "rgb(var(--pl-orange))"} />
       <text y={big ? -2 : 0} textAnchor="middle" className="fill-pl-text font-mono" fontSize={big ? 11 : 9}>{node.kind.toUpperCase()}</text>
       <text y={big ? 12 : 11} textAnchor="middle" className="fill-pl-mute font-mono" fontSize="9">{gb(node.totalMb)}G</text>
       <text y={s + 14} textAnchor="middle" className="fill-pl-text" fontSize="10">{node.name}</text>
       {sub && <text y={s + 26} textAnchor="middle" className="fill-pl-dim font-mono" fontSize="8">{sub}</text>}
-      {node.transport === "lan" && <g transform={`translate(${s - 12},${-s - 7})`}><rect width="22" height="11" fill="#111418" stroke="#68C1EE" /><text x="11" y="8.5" textAnchor="middle" fontSize="7.5" className="font-mono" fill="#68C1EE">LAN</text></g>}
+      {node.transport === "lan" && <g transform={`translate(${s - 12},${-s - 7})`}><rect width="22" height="11" fill="rgb(var(--pl-bg0))" stroke="rgb(var(--pl-cyan))" /><text x="11" y="8.5" textAnchor="middle" fontSize="7.5" className="font-mono" fill="rgb(var(--pl-cyan))">LAN</text></g>}
     </g>
   );
 }
