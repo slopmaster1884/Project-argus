@@ -1,22 +1,24 @@
+@import "./theme.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html, body, #root { height: 100%; }
-body { background: #111418; font-feature-settings: "tnum" 1, "cv11" 1; }
+body { background: rgb(var(--pl-bg0)); font-feature-settings: "tnum" 1, "cv11" 1; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #1C2127; }
-::-webkit-scrollbar-thumb { background: #404854; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgb(var(--pl-line2) / .7); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--pl-blue) / .6); }
 .dot-grid {
-  background-color: #111418;
-  background-image: radial-gradient(#2F343C 1px, transparent 1px);
+  background-color: rgb(var(--pl-bg0) / calc(var(--glass-bg0) * .6));
+  background-image: radial-gradient(rgb(var(--pl-line) / .55) 1px, transparent 1px);
   background-size: 16px 16px;
 }
 @layer components {
-  .panel { @apply border border-pl-line bg-pl-bg1; }
+  .panel { @apply rounded-md border border-pl-line/70 bg-pl-bg1 shadow-[0_8px_32px_-12px_rgba(0,0,0,.45)]; }
   .panel-head { @apply flex h-8 shrink-0 items-center justify-between border-b border-pl-line bg-pl-bg2 px-3 text-2xs font-semibold uppercase tracking-[0.12em] text-pl-mute; }
   .label { @apply text-2xs font-semibold uppercase tracking-[0.12em] text-pl-dim; }
-  .btn { @apply inline-flex shrink-0 whitespace-nowrap h-7 items-center gap-1.5 rounded border border-pl-line2 bg-pl-bg3 px-2.5 text-xs text-pl-text hover:bg-pl-bg4 disabled:cursor-not-allowed disabled:opacity-40; }
-  .btn-primary { @apply inline-flex shrink-0 whitespace-nowrap h-7 items-center gap-1.5 rounded bg-pl-blue2 px-2.5 text-xs font-medium text-white hover:bg-[#215DB0] disabled:cursor-not-allowed disabled:bg-pl-bg3 disabled:text-pl-dim; }
+  .btn { @apply inline-flex shrink-0 whitespace-nowrap h-7 items-center gap-1.5 rounded border border-pl-line2/80 bg-pl-bg3 px-2.5 text-xs text-pl-text hover:bg-pl-bg4 disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-primary { @apply inline-flex shrink-0 whitespace-nowrap h-7 items-center gap-1.5 rounded bg-pl-blue2 px-2.5 text-xs font-medium text-white shadow-[0_0_18px_-6px_rgb(var(--accent-glow)/.8)] hover:brightness-110 disabled:cursor-not-allowed disabled:bg-pl-bg3 disabled:text-pl-dim disabled:shadow-none; }
   .tag { @apply inline-flex whitespace-nowrap items-center gap-1 rounded px-1.5 py-px font-mono text-2xs uppercase; }
 }

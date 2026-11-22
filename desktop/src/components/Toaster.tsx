@@ -20,7 +20,7 @@ export default function Toaster() {
       {toasts.map((t) => {
         const I = ICON[t.kind];
         return (
-          <div key={t.id} className={clsx("pointer-events-auto flex items-start gap-2 border-l-2 border-y border-r border-y-pl-line2 border-r-pl-line2 bg-pl-bg2 px-3 py-2 text-xs shadow-2xl", TONE[t.kind])}>
+          <div key={t.id} className={clsx("glass anim-pop pointer-events-auto flex items-start gap-2 rounded-md border-l-2 border-y border-r border-y-pl-line2/60 border-r-pl-line2/60 bg-pl-bg2 px-3 py-2 text-xs shadow-2xl", TONE[t.kind])}>
             <I size={14} className="mt-0.5 shrink-0" />
             <div className="min-w-0 flex-1"><div className="leading-5 text-pl-text">{t.text}</div>
               {t.detail && <Details raw={t.detail} className="mt-0.5" onOpen={() => keepToast(t.id)} />}</div>

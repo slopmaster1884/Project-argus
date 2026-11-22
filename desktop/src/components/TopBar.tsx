@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, CircleHelp, Hexagon, Info, Sparkles } from "lucide-react";
+import { ChevronRight, CircleHelp, Hexagon, Info, Palette, Sparkles } from "lucide-react";
+import { useAppearanceUi } from "../lib/theme";
 import { useT } from "../lib/i18n";
 import clsx from "clsx";
 import { useCluster } from "../store/cluster";
@@ -19,7 +20,7 @@ export default function TopBar() {
   return (
     <header className="flex h-10 min-w-0 items-center gap-3 overflow-hidden whitespace-nowrap border-b border-pl-line bg-pl-bg2 pl-3 pr-3 xl:pr-4">
       <div className="flex shrink-0 items-center gap-2">
-        <Hexagon size={18} className="fill-pl-blue2 text-pl-blue" strokeWidth={1.5} />
+        <Hexagon size={18} className="fill-pl-blue2 text-pl-blue drop-shadow-[0_0_6px_rgb(var(--accent-glow)/.8)]" strokeWidth={1.5} />
         <span className="text-[13px] font-semibold tracking-[0.18em] text-pl-text">ARGUS</span>
         <span className="hidden text-2xs text-pl-dim xl:inline">LOCAL COMPUTE</span>
       </div>
@@ -47,6 +48,9 @@ export default function TopBar() {
           <button title="Доступно обновление — нажмите, чтобы решить" onClick={() => setUpdateDialog(true)}
             className="tag shrink-0 border border-pl-green/60 text-pl-green hover:bg-pl-green/10">⬆ {upd}</button>
         )}
+        <button title={t("ap.open")} onClick={() => useAppearanceUi.getState().setOpen(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-pl-line2 text-pl-blue hover:bg-pl-bg3">
+          <Palette size={13} />
+        </button>
         <button title="О программе · обновления" onClick={() => setAbout(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-pl-line2 text-pl-mute hover:bg-pl-bg3 hover:text-pl-text">
           <Info size={13} />
         </button>

@@ -1,0 +1,108 @@
+/* Argus v2 «Serpent» themes — built from the user's design pack (assets/design-pack).
+   Colours are "R G B" triplets so Tailwind can add alpha (see tailwind.config.js).
+   --glass-bgN = how opaque each surface is (1 = solid). html[data-glass="off"] makes them solid again. */
+:root, html[data-theme="green"] {
+  color-scheme: dark;
+  --pl-bg0: 6 14 11;  --pl-bg1: 10 22 17;  --pl-bg2: 14 30 23;  --pl-bg3: 22 44 34;  --pl-bg4: 30 58 45;
+  --pl-line: 52 92 72; --pl-line2: 66 112 88;
+  --pl-text: 236 246 240; --pl-mute: 168 196 180; --pl-dim: 112 146 128;
+  --pl-blue: 61 220 132; --pl-blue2: 22 150 88;          /* accent = emerald (the «blue» slot is the app accent) */
+  --pl-green: 74 222 128; --pl-orange: 245 166 35; --pl-red: 248 96 96; --pl-gold: 226 196 106;
+  --pl-cyan: 94 234 212; --pl-violet: 167 139 250; --pl-rose: 255 102 161;
+  --accent-glow: 61 220 132;
+  --bg-image: url("/theme/bg-green.webp");
+  --bg-tint: linear-gradient(180deg, rgba(3,10,7,.25), rgba(3,10,7,.55));
+  --anim-src: "green"; --anim-filter: none;
+}
+html[data-theme="pink"] {
+  color-scheme: light;
+  --pl-bg0: 252 240 240; --pl-bg1: 255 246 246; --pl-bg2: 250 232 233; --pl-bg3: 244 218 221; --pl-bg4: 236 202 207;
+  --pl-line: 226 186 192; --pl-line2: 212 166 174;
+  --pl-text: 46 18 26; --pl-mute: 108 64 76; --pl-dim: 150 106 116;
+  --pl-blue: 194 24 72; --pl-blue2: 168 18 60;            /* ruby, from the snakes' eyes */
+  --pl-green: 22 140 80; --pl-orange: 196 110 10; --pl-red: 200 30 50; --pl-gold: 166 124 30;
+  --pl-cyan: 14 130 150; --pl-violet: 120 80 200; --pl-rose: 214 40 110;
+  --accent-glow: 230 60 110;
+  --bg-image: url("/theme/bg-pink.webp");
+  --bg-tint: linear-gradient(180deg, rgba(255,240,242,.15), rgba(255,236,240,.4));
+  --anim-src: "pink"; --anim-filter: none;
+}
+html[data-theme="black"] {
+  color-scheme: dark;
+  --pl-bg0: 6 6 7; --pl-bg1: 12 12 14; --pl-bg2: 18 18 21; --pl-bg3: 28 28 32; --pl-bg4: 40 40 46;
+  --pl-line: 58 58 66; --pl-line2: 78 78 88;
+  --pl-text: 240 240 242; --pl-mute: 176 176 184; --pl-dim: 120 120 130;
+  --pl-blue: 214 214 222; --pl-blue2: 88 88 100;          /* silver scales */
+  --pl-green: 74 222 128; --pl-orange: 245 166 35; --pl-red: 248 96 96; --pl-gold: 226 196 106;
+  --pl-cyan: 120 200 230; --pl-violet: 180 160 250; --pl-rose: 255 120 170;
+  --accent-glow: 200 200 210;
+  --bg-image: url("/theme/bg-black.webp");
+  --bg-tint: linear-gradient(180deg, rgba(0,0,0,.1), rgba(0,0,0,.45));
+  --anim-src: "green"; --anim-filter: grayscale(1) contrast(1.15);
+}
+html[data-theme="mono"] {
+  color-scheme: light;
+  --pl-bg0: 246 246 244; --pl-bg1: 252 252 250; --pl-bg2: 240 240 237; --pl-bg3: 228 228 224; --pl-bg4: 214 214 208;
+  --pl-line: 200 200 194; --pl-line2: 176 176 170;
+  --pl-text: 14 14 16; --pl-mute: 70 70 76; --pl-dim: 112 112 118;
+  --pl-blue: 20 20 22; --pl-blue2: 30 30 34;              /* black ink + gold veins */
+  --pl-green: 22 140 80; --pl-orange: 190 110 10; --pl-red: 200 36 44; --pl-gold: 176 136 30;
+  --pl-cyan: 14 120 140; --pl-violet: 110 70 190; --pl-rose: 200 40 110;
+  --accent-glow: 196 160 60;
+  --bg-image: url("/theme/bg-mono.webp");
+  --bg-tint: linear-gradient(180deg, rgba(255,255,255,.12), rgba(250,250,248,.4));
+  --anim-src: "green"; --anim-filter: grayscale(1) invert(1) contrast(1.05);
+}
+
+/* glass levels */
+:root { --glass-blur: 8px; --glass-bg0: .12; --glass-bg1: .5; --glass-bg2: .6; --glass-bg3: .68; --glass-bg4: .78; }
+html[data-glass="low"]  { --glass-blur: 4px; --glass-bg0: .45; --glass-bg1: .8; --glass-bg2: .85; --glass-bg3: .88; --glass-bg4: .92; }
+html[data-glass="high"] { --glass-blur: 14px; --glass-bg0: 0; --glass-bg1: .34; --glass-bg2: .44; --glass-bg3: .55; --glass-bg4: .68; }
+html[data-glass="off"]  { --glass-blur: 0px;  --glass-bg0: 1; --glass-bg1: 1; --glass-bg2: 1; --glass-bg3: 1; --glass-bg4: 1; }
+html[data-theme="pink"]:not([data-glass]), html[data-theme="mono"]:not([data-glass]), html[data-theme="pink"][data-glass="mid"], html[data-theme="mono"][data-glass="mid"] { --glass-bg0: .15; --glass-bg1: .62; --glass-bg2: .7; --glass-bg3: .76; --glass-bg4: .84; }
+html[data-theme="pink"][data-glass="off"], html[data-theme="mono"][data-glass="off"] { --glass-bg0: 1; --glass-bg1: 1; --glass-bg2: 1; --glass-bg3: 1; --glass-bg4: 1; }
+
+/* Blur only the structural surfaces (cheap): bars, side panels, panels, dialogs, toasts. */
+html:not([data-glass="off"]) header,
+html:not([data-glass="off"]) footer,
+html:not([data-glass="off"]) aside,
+html:not([data-glass="off"]) .panel,
+html:not([data-glass="off"]) .glass,
+html:not([data-glass="off"]) [role="dialog"] {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.35);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.35);
+}
+
+/* App background: theme picture + tint, or a see-through window (Windows mica/acrylic). */
+.argus-backdrop { position: fixed; inset: 0; z-index: -1; background: rgb(var(--pl-bg0)); overflow: hidden; }
+.argus-backdrop::before { content: ""; position: absolute; inset: -24px; background: var(--bg-image) center / cover no-repeat; filter: saturate(1.05); }
+.argus-backdrop::after { content: ""; position: absolute; inset: 0; background: var(--bg-tint); }
+html[data-bg="window"] body, html[data-bg="window"] .argus-backdrop { background: transparent; }
+html[data-bg="window"] .argus-backdrop::before { display: none; }
+html[data-bg="plain"] .argus-backdrop::before { display: none; }
+html[data-bg="drift"] .argus-backdrop::before { animation: argus-drift 60s ease-in-out infinite alternate; }
+@keyframes argus-drift { from { transform: scale(1.04) translate(0, 0); } to { transform: scale(1.1) translate(-1.5%, -1%); } }
+
+/* accent glow on focus / primary buttons */
+.glow { box-shadow: 0 0 0 1px rgb(var(--accent-glow) / .35), 0 0 24px -4px rgb(var(--accent-glow) / .55); }
+
+/* Splash + notification / incident animations */
+.argus-anim { filter: var(--anim-filter); }
+@keyframes argus-fade-out { to { opacity: 0; visibility: hidden; } }
+@keyframes argus-pop { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes argus-ring { 0% { box-shadow: 0 0 0 0 rgb(var(--accent-glow) / .6); } 100% { box-shadow: 0 0 0 18px rgb(var(--accent-glow) / 0); } }
+@keyframes argus-incident { 0%, 100% { opacity: 0; } 12%, 70% { opacity: 1; } }
+@keyframes argus-logo { 0% { opacity: 0; letter-spacing: .6em; } 100% { opacity: 1; letter-spacing: .32em; } }
+.anim-pop { animation: argus-pop .28s cubic-bezier(.2,.8,.2,1) both; }
+.anim-ring { animation: argus-ring 1.2s ease-out 2; }
+
+/* No animations: the user's choice or the OS «reduce motion». */
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"]) *, html:not([data-motion="full"]) *::before, html:not([data-motion="full"]) *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* The old layout draws 1px dividers as `gap-px bg-pl-line` on grids — an opaque sheet behind everything.
+   With glass we keep it see-through and draw the dividers on the children instead. */
+html:not([data-glass="off"]) .gap-px.bg-pl-line { background-color: transparent; }
+html:not([data-glass="off"]) .gap-px.bg-pl-line > * { box-shadow: 0 0 0 .5px rgb(var(--pl-line) / .7); }

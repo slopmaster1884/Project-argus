@@ -30,10 +30,11 @@ import kotlin.concurrent.thread
 /** ARGUS node console: status, resources, health checks, log with copy/share. */
 class MainActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
-    private val BG = Color.parseColor("#0B0E14"); private val PANEL = Color.parseColor("#121722")
-    private val LINE = Color.parseColor("#232B3A"); private val DIM = Color.parseColor("#7D8798")
-    private val TEXT = Color.parseColor("#E6EAF2"); private val CYAN = Color.parseColor("#22D3EE")
-    private val GREEN = Color.parseColor("#34D399"); private val AMBER = Color.parseColor("#FBBF24")
+    // v2 «Serpent» green theme (matches the desktop default theme)
+    private val BG = Color.parseColor("#060E0B"); private val PANEL = Color.parseColor("#0E1E17")
+    private val LINE = Color.parseColor("#2A4A3A"); private val DIM = Color.parseColor("#7A9A88")
+    private val TEXT = Color.parseColor("#ECF6F0"); private val CYAN = Color.parseColor("#3DDC84")
+    private val GREEN = Color.parseColor("#4ADE80"); private val AMBER = Color.parseColor("#F5A623")
     private val RED = Color.parseColor("#F87171")
 
     private lateinit var pill: TextView; private lateinit var title: TextView; private lateinit var hint: TextView
