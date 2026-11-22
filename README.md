@@ -13,7 +13,7 @@
 
 **Проект делает один человек на GTX 960. Если зашло — [закинь на железо](SUPPORT.md) ❤️**
 
-![Argus](docs/screens/04-cluster-lan.png)
+![Argus](docs/screens/v2-devices.jpg)
 
 </div>
 
@@ -80,12 +80,12 @@ flowchart LR
 
 <table>
 <tr>
-<td><img src="docs/screens/05-chat-quickstart.png" alt="Чат"/><br/><sub>Чат</sub></td>
-<td><img src="docs/screens/02-models-huggingface.png" alt="Hugging Face"/><br/><sub>Модели с Hugging Face</sub></td>
+<td><img src="docs/screens/v2-chat.jpg" alt="Чат"/><br/><sub>Чат</sub></td>
+<td><img src="docs/screens/v2-models.jpg" alt="Модели"/><br/><sub>Модели</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screens/06-agent-confirm.png" alt="Агент"/><br/><sub>Агент спрашивает разрешение</sub></td>
-<td><img src="docs/screens/07-chat-markdown.png" alt="Код"/><br/><sub>Код и форматирование</sub></td>
+<td><img src="docs/screens/v2-themes.jpg" alt="Четыре темы: зелёная, розовая, чёрная, бело-чёрная"/><br/><sub>Четыре темы: зелёная, розовая, чёрная, бело-чёрная</sub></td>
+<td><img src="docs/screens/v2-appearance.jpg" alt="Оформление"/><br/><sub>Оформление</sub></td>
 </tr>
 </table>
 

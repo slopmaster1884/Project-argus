@@ -13,7 +13,7 @@
 
 **Built by one person on a GTX 960. If it's useful to you, [chip in for test hardware](SUPPORT.md) ❤️**
 
-![Argus](docs/screens/04-cluster-lan.png)
+![Argus](docs/screens/v2-devices.jpg)
 
 </div>
 
