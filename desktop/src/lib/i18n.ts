@@ -134,6 +134,11 @@ const ru = {
   "fr.close": "Закрыть",
   "fr.reopen": "Мастер настройки",
   "ap.title": "Оформление",
+  "tb.nodes": "Ноды",
+  "tb.pool": "Пул",
+  "tb.alloc": "Доступно",
+  "tb.idle": "ДВИЖОК СВОБОДЕН",
+  "tb.error": "ОШИБКА ДВИЖКА",
   "ap.open": "Оформление: темы, стекло, анимации",
   "ap.theme": "Тема",
   "ap.theme.green": "Зелёная",
@@ -429,6 +434,11 @@ const en: Record<I18nKey, string> = {
   "fr.close": "Close",
   "fr.reopen": "Setup wizard",
   "ap.title": "Appearance",
+  "tb.nodes": "Nodes",
+  "tb.pool": "Pool",
+  "tb.alloc": "Allocatable",
+  "tb.idle": "ENGINE IDLE",
+  "tb.error": "ENGINE ERROR",
   "ap.open": "Appearance: themes, glass, animations",
   "ap.theme": "Theme",
   "ap.theme.green": "Green",
@@ -614,3 +624,6 @@ export function useT() {
 export function fmt(s: string, vars: Record<string, string | number>): string {
   return s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
+
+/** Inline two-language string for UI that has no key yet (reads the current language; views re-mount on switch). */
+export const tr = (ruText: string, enText: string): string => (useLang.getState().lang === "en" ? enText : ruText);

@@ -30,8 +30,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "Segoe UI", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "SFMono-Regular", "Consolas", "ui-monospace", "monospace"],
+        sans: ["Inter Variable", "Inter", "-apple-system", "Segoe UI", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono Variable", "JetBrains Mono", "SFMono-Regular", "Consolas", "ui-monospace", "monospace"],
       },
       borderRadius: { DEFAULT: "6px", sm: "4px", md: "8px", lg: "12px", xl: "16px" },
       fontSize: { "2xs": ["10px", "14px"] },

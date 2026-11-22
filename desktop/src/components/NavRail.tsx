@@ -22,19 +22,19 @@ export default function NavRail() {
   // UI language lives in argus-features.json
   useEffect(() => { featuresGet().then((f) => { if (f && (f.lang === "ru" || f.lang === "en")) useLang.getState().setLang(f.lang); }).catch(() => {}); }, []);
   return (
-    <aside className="flex w-12 shrink-0 flex-col items-center border-r border-pl-line bg-pl-bg1 py-2 lg:w-14">
+    <aside className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-pl-line/70 bg-pl-bg1 px-1.5 py-2 lg:w-[72px]">
       {items.map(({ id, label: key, icon: Icon }) => { const label = t(key); return (
         <button key={id} data-nav={id} aria-label={label} onClick={() => setView(id)} title={id === "parallel" ? t("nav.parallelHint") : label}
-          className={clsx("group relative flex h-11 w-full lg:h-12 flex-col items-center justify-center gap-0.5 text-2xs",
-            view === id ? "text-pl-text" : "text-pl-dim hover:text-pl-mute")}>
-          {view === id && <span className="absolute left-0 top-2 h-8 w-0.5 bg-pl-blue" />}
-          <Icon size={18} strokeWidth={1.6} />
-          <span className="hidden tracking-wide lg:block">{label}</span>
+          className={clsx("group relative flex h-11 w-full flex-col items-center justify-center gap-0.5 rounded-lg text-[10px] transition-all duration-150 lg:h-[52px]",
+            view === id ? "bg-pl-blue/15 text-pl-text shadow-[inset_0_0_0_1px_rgb(var(--pl-blue)/.45),0_0_18px_-6px_rgb(var(--accent-glow)/.8)]" : "text-pl-dim hover:bg-pl-bg3 hover:text-pl-text")}>
+          {view === id && <span className="absolute -left-1.5 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r bg-pl-blue shadow-[0_0_10px_rgb(var(--accent-glow))]" />}
+          <Icon size={18} strokeWidth={1.7} className={clsx("transition-transform duration-150 group-hover:scale-110", view === id && "text-pl-blue drop-shadow-[0_0_6px_rgb(var(--accent-glow)/.8)]")} />
+          <span className="hidden max-w-full truncate px-0.5 leading-tight lg:block">{label}</span>
         </button>
       ); })}
       <div className="mt-auto">
         <button onClick={() => setWizard(true)} title={t("nav.connect")}
-          className="flex h-9 w-9 items-center lg:h-10 lg:w-10 justify-center rounded border border-pl-line2 text-pl-blue hover:bg-pl-bg3">
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-pl-blue/50 bg-pl-blue/10 text-pl-blue transition-all hover:bg-pl-blue/20 hover:shadow-[0_0_18px_-4px_rgb(var(--accent-glow))]">
           <Usb size={17} />
         </button>
       </div>

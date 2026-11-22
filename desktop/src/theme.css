@@ -17,7 +17,7 @@
 html[data-theme="pink"] {
   color-scheme: light;
   --pl-bg0: 252 240 240; --pl-bg1: 255 246 246; --pl-bg2: 250 232 233; --pl-bg3: 244 218 221; --pl-bg4: 236 202 207;
-  --pl-line: 226 186 192; --pl-line2: 212 166 174;
+  --pl-line: 150 70 90; --pl-line2: 120 40 62;
   --pl-text: 46 18 26; --pl-mute: 108 64 76; --pl-dim: 150 106 116;
   --pl-blue: 194 24 72; --pl-blue2: 168 18 60;            /* ruby, from the snakes' eyes */
   --pl-green: 22 140 80; --pl-orange: 196 110 10; --pl-red: 200 30 50; --pl-gold: 166 124 30;
@@ -43,7 +43,7 @@ html[data-theme="black"] {
 html[data-theme="mono"] {
   color-scheme: light;
   --pl-bg0: 246 246 244; --pl-bg1: 252 252 250; --pl-bg2: 240 240 237; --pl-bg3: 228 228 224; --pl-bg4: 214 214 208;
-  --pl-line: 200 200 194; --pl-line2: 176 176 170;
+  --pl-line: 24 24 26; --pl-line2: 10 10 12;
   --pl-text: 14 14 16; --pl-mute: 70 70 76; --pl-dim: 112 112 118;
   --pl-blue: 20 20 22; --pl-blue2: 30 30 34;              /* black ink + gold veins */
   --pl-green: 22 140 80; --pl-orange: 190 110 10; --pl-red: 200 36 44; --pl-gold: 176 136 30;
@@ -55,7 +55,7 @@ html[data-theme="mono"] {
 }
 
 /* glass levels */
-:root { --glass-blur: 8px; --glass-bg0: .12; --glass-bg1: .5; --glass-bg2: .6; --glass-bg3: .68; --glass-bg4: .78; }
+:root { --glass-blur: 8px; --glass-bg0: .32; --glass-bg1: .5; --glass-bg2: .6; --glass-bg3: .68; --glass-bg4: .78; }
 html[data-glass="low"]  { --glass-blur: 4px; --glass-bg0: .45; --glass-bg1: .8; --glass-bg2: .85; --glass-bg3: .88; --glass-bg4: .92; }
 html[data-glass="high"] { --glass-blur: 14px; --glass-bg0: 0; --glass-bg1: .34; --glass-bg2: .44; --glass-bg3: .55; --glass-bg4: .68; }
 html[data-glass="off"]  { --glass-blur: 0px;  --glass-bg0: 1; --glass-bg1: 1; --glass-bg2: 1; --glass-bg3: 1; --glass-bg4: 1; }

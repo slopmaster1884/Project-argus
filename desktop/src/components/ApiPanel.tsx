@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import clsx from "clsx";
@@ -51,7 +52,7 @@ print(r.choices[0].message.content)
     <div className="grid h-full grid-cols-1 content-start gap-px overflow-y-auto bg-pl-line xl:grid-cols-[minmax(0,1fr)_320px] xl:content-stretch xl:overflow-hidden">
       <div className="flex min-w-0 flex-col gap-3 bg-pl-bg0 p-3 xl:overflow-y-auto">
         <div className="panel" data-tour="api">
-          <div className="panel-head gap-2"><span className="truncate">OpenAI-compatible endpoint</span><Health live={live} /></div>
+          <div className="panel-head gap-2"><span className="truncate">{tr("OpenAI-совместимый адрес", "OpenAI-compatible endpoint")}</span><Health live={live} /></div>
           <div className="grid grid-cols-3 divide-x divide-pl-line">
             <Field k="Base URL" v={base} />
             <Field k="Model ID" v={model} />
@@ -76,20 +77,20 @@ print(r.choices[0].message.content)
       </div>
 
       <aside className="flex flex-col bg-pl-bg1 max-xl:border-t max-xl:border-pl-line">
-        <div className="panel-head"><span>Access policy</span></div>
+        <div className="panel-head"><span>{tr("Доступ", "Access policy")}</span></div>
         <label className="flex cursor-pointer items-center justify-between border-b border-pl-line px-4 py-3 text-xs">
           <span>
-            <span className="text-pl-text">Expose on local network</span>
-            <span className="mt-0.5 block text-2xs text-pl-dim">binds 0.0.0.0:8080 · for WSL, Docker, other PCs</span>
+            <span className="text-pl-text">{tr("Открыть в локальной сети", "Expose on local network")}</span>
+            <span className="mt-0.5 block text-2xs text-pl-dim">{tr("слушает 0.0.0.0:8080 · для WSL, Docker, других ПК", "binds 0.0.0.0:8080 · for WSL, Docker, other PCs")}</span>
           </span>
           <button onClick={() => setLan(!lan)} className={clsx("relative h-4 w-8 rounded-full transition", lan ? "bg-pl-blue2" : "bg-pl-bg4")}>
             <span className={clsx("absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all", lan ? "left-[18px]" : "left-0.5")} />
           </button>
         </label>
         <div className="space-y-3 p-4 text-xs leading-5 text-pl-mute">
-          <p>Applies on next Deploy. Off by default: only apps on this PC can reach the model.</p>
+          <p>{tr("Применится при следующем запуске модели. По умолчанию выключено: модель доступна только программам на этом ПК.", "Applies on next Deploy. Off by default: only apps on this PC can reach the model.")}</p>
           <p>Agents (Hermes, OpenHands, Cline) need tool calling and a long context. Use a model tagged <span className="tag bg-pl-bg3 text-pl-mute">agent</span> with the 64K preset.</p>
-          <p className="text-pl-dim">No auth on the server: keep LAN mode off on public Wi‑Fi.</p>
+          <p className="text-pl-dim">{tr("На сервере нет пароля: в публичном Wi‑Fi держите это выключенным.", "No auth on the server: keep LAN mode off on public Wi‑Fi.")}</p>
         </div>
       </aside>
     </div>
@@ -105,7 +106,7 @@ function Health({ live }: { live: boolean }) {
     tick(); const t = setInterval(tick, 5000);
     return () => { stop = true; clearInterval(t); };
   }, [live]);
-  const [t, c] = ok ? ["SERVING", "border-pl-green/50 text-pl-green"] : live ? ["CHECKING", "border-pl-orange/50 text-pl-orange"] : ["OFFLINE", "border-pl-line2 text-pl-dim"];
+  const [t, c] = ok ? [tr("РАБОТАЕТ", "SERVING"), "border-pl-green/50 text-pl-green"] : live ? [tr("ПРОВЕРКА", "CHECKING"), "border-pl-orange/50 text-pl-orange"] : [tr("ВЫКЛ", "OFFLINE"), "border-pl-line2 text-pl-dim"];
   return <span className={clsx("tag shrink-0 border normal-case tracking-normal", c)}>● {t}</span>;
 }
 
