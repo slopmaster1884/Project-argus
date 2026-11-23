@@ -19,8 +19,8 @@
 </div>
 
 <table>
-<tr><td width="33%" valign="top"><h3>🧠 Модель больше видеокарты</h3>Слои делятся между GPU, процессором и телефонами</td><td width="33%" valign="top"><h3>📱 Старые телефоны в деле</h3>USB, USB-модем или Wi-Fi, без root</td><td width="33%" valign="top"><h3>🔌 API как у OpenAI</h3>Open WebUI, Jan, Continue, Hermes</td></tr>
-<tr><td width="33%" valign="top"><h3>🤖 Агент на твоём ПК</h3>Каждое действие подтверждаешь сам</td><td width="33%" valign="top"><h3>🐧 Linux и Raspberry Pi</h3>Нода одной командой или готовым образом</td><td width="33%" valign="top"><h3>🔒 Всё дома</h3>Без интернета, PIN-режим для нод</td></tr>
+<tr><td width="33%" valign="top"><h3>Модель больше видеокарты</h3>Слои делятся между GPU, процессором и телефонами</td><td width="33%" valign="top"><h3>Старые телефоны в деле</h3>USB, USB-модем или Wi-Fi, без root</td><td width="33%" valign="top"><h3>API как у OpenAI</h3>Open WebUI, Jan, Continue, Hermes</td></tr>
+<tr><td width="33%" valign="top"><h3>Агент на твоём ПК</h3>Каждое действие подтверждаешь сам</td><td width="33%" valign="top"><h3>Linux и Raspberry Pi</h3>Нода одной командой или готовым образом</td><td width="33%" valign="top"><h3>Всё дома</h3>Без интернета, PIN-режим для нод</td></tr>
 </table>
 
 ## Что это
@@ -33,19 +33,7 @@ Root не нужен. На телефон ставится обычное при
 
 ## Как это работает
 
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"primaryColor":"#0f2a1e","primaryTextColor":"#eafff3","primaryBorderColor":"#3ddc84","lineColor":"#3ddc84","clusterBkg":"#0a1812","clusterBorder":"#2f6b4c","fontFamily":"Inter, Segoe UI, sans-serif"}}}%%
-flowchart LR
-    U([Ты пишешь в чат]) --> PC
-    subgraph PC["Компьютер"]
-        GPU["Видеокарта"]
-        CPU["Процессор"]
-    end
-    PC <-->|USB| P1["Телефон 1"]
-    PC <-->|USB| P2["Телефон 2"]
-    PC <-.->|Wi-Fi| P3["Raspberry Pi / ноутбук"]
-    PC --> A([Ответ])
-```
+<p align="center"><img src="docs/brand/scheme-ru.svg" alt="Схема работы Argus" width="100%"/></p>
 
 Нейросеть состоит из слоёв. Argus замеряет, насколько быстрое каждое устройство и сколько у него памяти, и раздаёт слои так, чтобы ответ шёл как можно быстрее. Если модель целиком влезает в видеокарту, телефоны не трогаются вообще: так быстрее всего.
 
