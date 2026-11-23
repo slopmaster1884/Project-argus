@@ -173,4 +173,5 @@ jobs:
           files=("$IMG.img.xz" "$IMG.img.xz.sha256")
           [ -f "$IMG.rpi-imager-manifest" ] && files+=("$IMG.rpi-imager-manifest")
           gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          bash "$GITHUB_WORKSPACE/scripts/label-release-assets.sh" "$TAG" "$GITHUB_REPOSITORY"
           echo "attached to $TAG: ${files[*]}"
