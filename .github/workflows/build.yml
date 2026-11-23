@@ -213,11 +213,13 @@ jobs:
           cp scripts/argus-node-linux.sh dist/
           if [ -f scripts/install.sh ]; then cp scripts/install.sh dist/; else echo "::notice::scripts/install.sh not in this ref — not attached"; fi
           bash scripts/make-release-assets.sh dist
+          sed "s/__VERSION__/$V/g" .github/RELEASE_TEMPLATE.md > dist/RELEASE_BODY.md
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: Argus ${{ github.ref_name }}
           generate_release_notes: true
+          body_path: dist/RELEASE_BODY.md
           files: |
             dist/Argus-Setup.exe
             dist/Argus-Node.apk
@@ -227,3 +229,6 @@ jobs:
             dist/install.sh
             dist/SHA256SUMS.txt
           fail_on_unmatched_files: false
+      - name: Human-readable asset labels
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: bash scripts/label-release-assets.sh "${GITHUB_REF_NAME}"
