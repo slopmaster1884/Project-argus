@@ -19,8 +19,8 @@
 </div>
 
 <table>
-<tr><td width="33%" valign="top"><h3>🧠 Models bigger than your GPU</h3>Layers split across GPU, CPU and phones</td><td width="33%" valign="top"><h3>📱 Old phones put to work</h3>USB, tethering or Wi-Fi, no root</td><td width="33%" valign="top"><h3>🔌 OpenAI-compatible API</h3>Open WebUI, Jan, Continue, Hermes</td></tr>
-<tr><td width="33%" valign="top"><h3>🤖 Agent on your PC</h3>You approve every action</td><td width="33%" valign="top"><h3>🐧 Linux and Raspberry Pi</h3>A node in one command or a ready image</td><td width="33%" valign="top"><h3>🔒 Everything stays home</h3>Offline, PIN mode for nodes</td></tr>
+<tr><td width="33%" valign="top"><h3>Models bigger than your GPU</h3>Layers split across GPU, CPU and phones</td><td width="33%" valign="top"><h3>Old phones put to work</h3>USB, tethering or Wi-Fi, no root</td><td width="33%" valign="top"><h3>OpenAI-compatible API</h3>Open WebUI, Jan, Continue, Hermes</td></tr>
+<tr><td width="33%" valign="top"><h3>Agent on your PC</h3>You approve every action</td><td width="33%" valign="top"><h3>Linux and Raspberry Pi</h3>A node in one command or a ready image</td><td width="33%" valign="top"><h3>Everything stays home</h3>Offline, PIN mode for nodes</td></tr>
 </table>
 
 ## What it is
@@ -32,6 +32,8 @@ Argus joins your PC and your phones into one llama.cpp cluster. Phones connect o
 No root needed. The phone gets a regular app, Argus Node, which runs llama.cpp's `rpc-server`.
 
 ## How it works
+
+<p align="center"><img src="docs/brand/scheme-en.svg" alt="How Argus works" width="100%"/></p>
 
 Argus benchmarks each device on connect (speed and free memory) and hands out layers so tokens come out as fast as possible. If the model fits in VRAM alone, phones aren't used at all, because that's fastest.
 

@@ -397,10 +397,10 @@ async function foldSystemFor(base: string): Promise<boolean> {
 
 export async function* streamChat(messages: ApiMessage[], signal?: AbortSignal, onStats?: (s: ChatStats) => void, maxTokens?: number, base: string = LLAMA_URL) {
   if (!isTauri) { // browser demo
-    const demo = "Слои 0–15 лежат в VRAM видеокарты, слои 16–31 считает телефон через rpc-server по USB.\n\n"
-      + "```python\nfrom openai import OpenAI\nc = OpenAI(base_url=\"http://127.0.0.1:8080/v1\", api_key=\"argus\")\n```\n"
-      + "Каждый токен пересекает кабель **дважды** как небольшой тензор активаций, поэтому канал далёк от насыщения.";
-    let n = 0; for (const w of demo.split(/(?<= )/)) { if (signal?.aborted || (maxTokens && n >= maxTokens)) return; await new Promise((r) => setTimeout(r, 20)); n++; onStats?.({ tps: 7.4, promptTps: 41.2, tokens: n, ttftMs: 820 }); yield w; }
+    const demo = "RAID 5 раскладывает данные **полосами** по всем дискам, а в каждой полосе один блок отдаёт под чётность (XOR остальных).\n\n"
+      + "- Умер один диск: его содержимое восстанавливается из остальных.\n- Умерли два: данные потеряны.\n- Полезный объём: (N − 1) дисков.\n\n"
+      + "Например, 4 диска по 4 ТБ дают **12 ТБ** и переживают отказ любого одного.";
+    let n = 0; for (const w of demo.split(/(?<= )/)) { if (signal?.aborted || (maxTokens && n >= maxTokens)) return; await new Promise((r) => setTimeout(r, 75)); n++; onStats?.({ tps: 7.4, promptTps: 41.2, tokens: n, ttftMs: 820 }); yield w; }
     return;
   }
   const fold = await foldSystemFor(base);
