@@ -77,7 +77,7 @@ Section
   SetOutPath "$INSTDIR"
   File /oname=Argus.exe "${APP_EXE}"
   SetOutPath "$INSTDIR\resources"
-  File /x README.md "${RES_DIR}/*"
+  File /x README.md "${RES_DIR}\*"
   ; user data is NOT here: settings in %APPDATA%\com.harkcluster.desktop, models in the llama.cpp/HF cache
   WriteUninstaller "$INSTDIR\uninstall.exe"
   ${IfNot} ${Silent}
