@@ -48,7 +48,15 @@ UI: Palantir Blueprint-style dark ops console (topology graph, object inspector,
 - `StartModelArgs.warmupSystem` = system prompt of the current chat. Right after `/health` turns OK the engine is
   `warming` («Прогрев…»): the prompt is processed once (prompt cache), so the first real answer skips that prefill.
 
-### Experiment «Роли»: the «Помощник» role (`helper.rs`, UI `ParallelTest.tsx`, `lib/helpers.ts`)
+### 0.4: roles are a normal feature, task routing, «Поиск» (docs/ROLES.md / ROLES.en.md)
+- `route.rs`: pure routing rules (task type → role → node, fallback to the PC), RAM thresholds, settings migration; unit-tested.
+- «Помощник» no longer needs the experiment switch (`roles_enabled` on by default, 0.3.x explicit «off» kept via `roles_v04`);
+  a node gets the helper model only with enough free RAM. `queue.rs` (route `auto`/`main`) and `helper::subtask_run`
+  (agent tool `subtask`) send small LLM work to a ready helper and fall back to the main model when it fails or disappears.
+- «Поиск»: `roles_extra.rs` assigns llama-server `--embedding` (:50060) to Argus Node 0.4 nodes that report an
+  `embeddings` role; `rag.rs` uses it and fails over to the next node / the PC embedding server mid-index and mid-search.
+
+### Experiment «Роли» (0.3.2): the «Помощник» role (`helper.rs`, UI `ParallelTest.tsx`, `lib/helpers.ts`)
 - Off by default (`set_roles_enabled`). A node with role `helper` runs its **own** `llama-server` (static aarch64 build
   in the APK as `libllama_server.so`) with a small model next to the main model; it is never part of the split.
 - Models (`set_helper_model`): Qwen3 0.6B Q4_0 (default), Qwen3 1.7B Q4_0, Qwen3 4B Instruct 2507 Q4_0, or a custom
@@ -78,7 +86,7 @@ Rule: **nothing is installed without the user's click.** No «update automatical
 
 ### Desktop (`src-tauri/src/updater.rs`, UI `components/Updates.tsx`)
 - `updater::start`: 5 s after start and every 6 h, only if settings `checkUpdates` (UI «Проверять обновления», default on):
-  `GET https://api.github.com/repos/femboy1488/Project-argus/releases/latest` (User-Agent `Argus-Cluster/<ver>`, 10 s
+  `GET https://api.github.com/repos/slopmaster1884/Project-argus/releases/latest` (User-Agent `Argus-Cluster/<ver>`, 10 s
   timeout, errors only logged). `tag_name` must be `vX.Y[.Z]` (pre-release suffix ignored); anything else (e.g. the old
   `V2` release) is not a version and never offered. Newer than `CARGO_PKG_VERSION` ⇒ event `update-available`.
 - UI dialog «Доступна версия X. Хотите обновить?» + release notes (markdown): **Обновить / Позже / Пропустить эту версию**.
@@ -200,6 +208,23 @@ aarch64: our static musl builds from `android/app/src/main/jniLibs/arm64-v8a` (i
 (restarted if it dies) + a python3 (or socat) beacon loop that only beacons while rpc-server is alive.
 `--systemd` installs a user service. Verified in the sandbox (aarch64): static i8mm build started, beacon received on
 :50053, HELLO answered `v8.0.1`, rpc-server auto-restarted after `kill`.
+
+`scripts/install.sh` — one-command installer (`curl … | bash`): checks arch/distro/deps (prints the apt/dnf/pacman/zypper
+command, asks before sudo; `ARGUS_YES=1`), downloads `argus-node-linux.sh` from `ARGUS_REF` (default `main`) into
+`~/.local/share/argus-node/src/` (plus the aarch64 static builds into `~/.local/share/argus-node/`), offers
+`--open-firewall`, then `--systemd` (extra env such as `ARGUS_BEACON_TARGET` goes into a drop-in
+`argus-node.service.d/installer.conf`) or `--foreground`; `--uninstall`. RU/EN by `LANG` / `ARGUS_LANG`.
+
+### Windows PC as a Wi-Fi node — `scripts/argus-node-windows.ps1` (+ `argus-node-windows.cmd`)
+Downloads `llama-b12008-bin-win-{cuda-12.4|cuda-13.4|vulkan|cpu}-{x64|arm64}.zip` (CUDA also needs
+`cudart-llama-bin-win-cuda-<v>-<arch>.zip`) into `%LOCALAPPDATA%\ArgusNode`; auto pick: `nvidia-smi` driver ≥ 528 → CUDA
+(≥ 580 → 13.4, else 12.4), `System32\vulkan-1.dll` → Vulkan, else CPU (`-Backend` overrides). Runs `ggml-rpc-server.exe
+-H 0.0.0.0 -p 50052 -t <cores> -c` (restarted if it dies) and sends the same beacon via `UdpClient` to 255.255.255.255 plus
+each interface's subnet broadcast (Windows sends limited broadcast on one interface only) and `-BeaconTarget`.
+Firewall: inbound TCP rule "Argus Node (rpc-server)", profiles Private+Domain, added through a UAC-elevated child
+PowerShell (the script itself runs unelevated). `-Install` = Scheduled Task at logon (`-Background`: hidden, log in
+`node.log`), falls back to the Startup folder if the task can't be registered; `-Uninstall` removes task, rule, files.
+The `.ps1` is UTF-8 with BOM (Windows PowerShell 5.1 reads BOM-less files as ANSI); `.gitattributes` keeps the bytes.
 
 ## What's new in 0.2 (desktop)
 | | |

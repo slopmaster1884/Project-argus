@@ -1,0 +1,13 @@
+# Argus Node image: first boot — unique node name "Pi 5 · 3F2A" (model + last 4 hex of the MAC).
+[Unit]
+Description=Argus node first boot (unique node name)
+ConditionPathExists=!/var/lib/argus-node/node-name
+After=local-fs.target
+Before=argus-node.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/argus-node/argus-firstboot.sh
+
+[Install]
+WantedBy=multi-user.target
