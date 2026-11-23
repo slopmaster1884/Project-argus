@@ -1,21 +1,27 @@
 <div align="center">
 
-# ARGUS
+<img src="docs/brand/banner-en.svg" alt="Argus" width="100%"/>
 
-**Run a local LLM on your GPU plus the old phones in your drawer.**
+<a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/slopmaster1884/Project-argus?style=for-the-badge&color=3ddc84&labelColor=0a1611&label=release" alt="release"/></a>
+<a href="../../releases"><img src="https://img.shields.io/github/downloads/slopmaster1884/Project-argus/total?style=for-the-badge&color=3ddc84&labelColor=0a1611&label=downloads" alt="downloads"/></a>
+<a href="../../stargazers"><img src="https://img.shields.io/github/stars/slopmaster1884/Project-argus?style=for-the-badge&color=3ddc84&labelColor=0a1611&label=stars" alt="stars"/></a>
+<img src="https://img.shields.io/badge/llama.cpp-b12008-3ddc84?style=for-the-badge&labelColor=0a1611" alt="llama.cpp"/>
+<img src="https://img.shields.io/badge/Windows_·_Linux_·_Android_·_Pi-3ddc84?style=for-the-badge&labelColor=0a1611" alt="platforms"/>
 
-![version](https://img.shields.io/badge/version-0.4_(v2)-00e676)
-![platform](https://img.shields.io/badge/Windows_·_Linux_·_Android-7c4dff)
-![engine](https://img.shields.io/badge/engine-llama.cpp-ff4081)
-![license](https://img.shields.io/badge/free-open_source-00e676)
+### [Download](../../releases) · [Quick start](#quick-start) · [Linux](#linux) · [Second PC](#second-pc--laptop-as-a-node) · [Speed](#is-it-fast) · [Your own model](#your-own-model) · [What's new](#whats-new-in-v2-04) · [Support](SUPPORT.md) · [Русский](README.md)
 
-[Download](../../releases) · [Quick start](#quick-start) · [Linux](#linux) · [Second PC](#second-pc--laptop-as-a-node) · [Speed](#is-it-fast) · [Your own model](#your-own-model) · [What's new](#whats-new-in-v2-04) · [Support](SUPPORT.md) · [Русский](README.md)
+<img src="docs/brand/demo.gif" alt="Argus demo" width="100%"/>
+
+<sub>Cluster → model → chat → four themes. Recorded in demo mode.</sub>
 
 **Built by one person on a GTX 960. If it's useful to you, [chip in for test hardware](SUPPORT.md) ❤️**
 
-![Argus](docs/screens/cluster.jpg)
-
 </div>
+
+<table>
+<tr><td width="33%" valign="top"><h3>🧠 Models bigger than your GPU</h3>Layers split across GPU, CPU and phones</td><td width="33%" valign="top"><h3>📱 Old phones put to work</h3>USB, tethering or Wi-Fi, no root</td><td width="33%" valign="top"><h3>🔌 OpenAI-compatible API</h3>Open WebUI, Jan, Continue, Hermes</td></tr>
+<tr><td width="33%" valign="top"><h3>🤖 Agent on your PC</h3>You approve every action</td><td width="33%" valign="top"><h3>🐧 Linux and Raspberry Pi</h3>A node in one command or a ready image</td><td width="33%" valign="top"><h3>🔒 Everything stays home</h3>Offline, PIN mode for nodes</td></tr>
+</table>
 
 ## What it is
 
@@ -75,6 +81,12 @@ Argus benchmarks each device on connect (speed and free memory) and hands out la
 - Full English UI and docs.
 
 ## Quick start
+
+<p align="center">
+<a href="https://github.com/slopmaster1884/Project-argus/releases/latest/download/Argus-Setup.exe"><img src="https://img.shields.io/badge/⬇_Windows_—_Argus--Setup.exe-3ddc84?style=for-the-badge&labelColor=0a1611" alt="⬇_Windows_—_Argus--Setup.exe"/></a>
+<a href="../../releases/latest"><img src="https://img.shields.io/badge/⬇_Linux_—_AppImage_·_.deb-3ddc84?style=for-the-badge&labelColor=0a1611" alt="⬇_Linux_—_AppImage_·_.deb"/></a>
+<a href="https://github.com/slopmaster1884/Project-argus/releases/latest/download/Argus-Node.apk"><img src="https://img.shields.io/badge/⬇_Android_—_Argus_Node-3ddc84?style=for-the-badge&labelColor=0a1611" alt="⬇_Android_—_Argus_Node"/></a>
+</p>
 
 1. Get **Argus-Setup.exe** (Windows) or AppImage / .deb (Linux) from [releases](../../releases).
 2. On the phone: Settings → About phone → tap "Build number" 7 times → Developer options → **USB debugging**.
