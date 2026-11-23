@@ -1,0 +1,7 @@
+# Argus Node image: started by argus-pin-export.path. Writes /boot/firmware/argus-pin.txt (root: FAT is root-owned).
+[Unit]
+Description=Copy the Argus secured-mode PIN to /boot/firmware/argus-pin.txt
+
+[Service]
+Type=oneshot
+ExecStart=/opt/argus-node/argus-pin-export.sh

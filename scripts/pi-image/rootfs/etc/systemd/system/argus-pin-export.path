@@ -1,0 +1,10 @@
+# Argus Node image: copy the secured-mode PIN to the boot partition (/boot/firmware/argus-pin.txt) whenever it changes.
+[Unit]
+Description=Watch the Argus secured-mode PIN
+
+[Path]
+PathChanged=/var/lib/argus-node/pin
+Unit=argus-pin-export.service
+
+[Install]
+WantedBy=multi-user.target
