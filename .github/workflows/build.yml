@@ -99,7 +99,13 @@ jobs:
           V=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
           curl -fsSL -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           W=$(cygpath -w "$PWD")
-          "/c/Program Files (x86)/NSIS/makensis.exe" -V2 "-DVERSION=$V" \
+          MN="/c/Program Files (x86)/NSIS/makensis.exe"
+          if [ ! -x "$MN" ]; then
+            # windows-2025 runner images no longer ship NSIS
+            choco install nsis -y --no-progress >/dev/null
+            MN="/c/Program Files (x86)/NSIS/makensis.exe"
+          fi
+          "$MN" -V2 "-DVERSION=$V" \
             "-DAPP_EXE=$W\\desktop\\src-tauri\\target\\release\\usb-cluster.exe" \
             "-DRES_DIR=$W\\desktop\\src-tauri\\resources" \
             "-DICON=$W\\desktop\\src-tauri\\icons\\icon.ico" \
