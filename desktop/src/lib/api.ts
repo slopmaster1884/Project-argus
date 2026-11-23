@@ -87,7 +87,7 @@ export async function onUpdateProgress(cb: (p: UpdateProgress) => void): Promise
   return listen<UpdateProgress>("update-progress", (e) => cb(e.payload));
 }
 const mockUpdate = (): UpdateStatus => ({
-  current: "0.3.1", installKind: "nsis", available: true, skipped: false, checkEnabled: true, checking: false,
+  current: "0.4.0", installKind: "nsis", available: false, skipped: false, checkEnabled: true, checking: false,
   lastCheck: Math.floor(Date.now() / 1000), error: null, busy: false, phase: "", done: 0, total: 0, nodeServerError: "",
   latest: { version: "0.3.2", tag: "v0.3.2", name: "Argus 0.3.2", url: "https://github.com/slopmaster1884/Project-argus/releases",
     publishedAt: new Date().toISOString(), hasSums: true, asset: { name: "Argus-Setup.exe", url: "", size: 46_000_000 },
@@ -651,11 +651,11 @@ function mockNodes() {
       usableMb: 3584, loadPct: 20 + j(), weight: w("gpu:Vulkan0", 1), enabled: en("gpu:Vulkan0") }), 60),
   ];
   const tab = mockSpeed(base({ id: "R52T1234", name: "Galaxy S20", kind: "phone", endpoint: "127.0.0.1:50052", totalMb: 8192,
-    availableMb: 4100, usableMb: 2800, loadPct: 10 + j(), version: "0.3.2 (6)", appVc: 6, rttMs: 1.8, weight: w("R52T1234", 1), enabled: en("R52T1234") }), 4);
+    availableMb: 4100, usableMb: 2800, loadPct: 10 + j(), version: "0.4.0 (8)", appVc: 8, rttMs: 1.8, weight: w("R52T1234", 1), enabled: en("R52T1234") }), 4);
   const note = mockSpeed(base({ id: "R58N9ABC", name: "Galaxy Note10+", kind: "phone", endpoint: "127.0.0.1:50053", totalMb: 12288,
-    availableMb: 7400, usableMb: 5600, loadPct: 6 + j() / 2, version: "0.3.2 (6)", appVc: 6, rttMs: 2.1, weight: w("R58N9ABC", 1), enabled: en("R58N9ABC") }), 4);
+    availableMb: 7400, usableMb: 5600, loadPct: 6 + j() / 2, version: "0.4.0 (8)", appVc: 8, rttMs: 2.1, weight: w("R58N9ABC", 1), enabled: en("R58N9ABC") }), 4);
   const a52 = mockSpeed(base({ id: "RZ8R40XYZ", name: "Galaxy A52", kind: "phone", endpoint: "127.0.0.1:50054", totalMb: 6144,
-    availableMb: 3900, usableMb: 3000, loadPct: 3 + j() / 4, version: "0.3 (4)", appVc: 4, updateAvailable: "0.3.2 (6)", rttMs: 2.6, weight: w("RZ8R40XYZ", 1), enabled: en("RZ8R40XYZ") }), 4);
+    availableMb: 3900, usableMb: 3000, loadPct: 3 + j() / 4, version: "0.3 (4)", appVc: 4, updateAvailable: "0.4.0 (8)", rttMs: 2.6, weight: w("RZ8R40XYZ", 1), enabled: en("RZ8R40XYZ") }), 4);
   const lan = mock.lan.map((n) => mockSpeed({ ...n, weight: w(n.id, 1), enabled: en(n.id), loadPct: 5 + j() / 3, rttMs: 6.5 }, 4));
   const nodes = [tab, note, a52, ...lan];
   for (const n of nodes) { n.tempC = MOCK_TEMP[n.id] ?? null; n.throttled = (n.tempC ?? 0) >= 43; }
@@ -686,7 +686,7 @@ function mockSnapshot(): ClusterSnapshot {
   return { host, gpus, nodes, totalMb: host.totalMb + act.reduce((a, n) => a + n.totalMb, 0),
     usableMb: host.usableMb + act.reduce((a, n) => a + n.usableMb, 0),
     rpcServers: plan.rpcIds.map((id) => nodes.find((n) => n.id === id)!.endpoint!), split: plan.entries,
-    fastStart: true, bundledNodeVersion: "0.3.2 (6)", appVersion: "0.3.2", bundledNodeVc: 6,
+    fastStart: true, bundledNodeVersion: "0.4.0 (8)", appVersion: "0.4.0", bundledNodeVc: 8,
     discovered: mock.found.map((d) => ({ ...d, added: mock.lan.some((n) => n.id === d.id) })), autoAddDiscovered: mock.autoAdd,
     beaconError: "", adbOk: true, platform: "windows",
     engine: { status: mock.engine.status, reason: null, alias: mock.engine.alias, nodes: running ? plan.rpcIds.map((id) => nodes.find((n) => n.id === id)!.name) : [],

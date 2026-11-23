@@ -1,21 +1,27 @@
 <div align="center">
 
-# ARGUS
+<img src="docs/brand/banner-ru.svg" alt="Argus" width="100%"/>
 
-**Нейросеть у тебя дома: видеокарта плюс старые телефоны.**
+<a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/slopmaster1884/Project-argus?style=for-the-badge&color=3ddc84&labelColor=0a1611&label=релиз" alt="release"/></a>
+<a href="../../releases"><img src="https://img.shields.io/github/downloads/slopmaster1884/Project-argus/total?style=for-the-badge&color=3ddc84&labelColor=0a1611&label=скачали" alt="downloads"/></a>
+<a href="../../stargazers"><img src="https://img.shields.io/github/stars/slopmaster1884/Project-argus?style=for-the-badge&color=3ddc84&labelColor=0a1611&label=звёзды" alt="stars"/></a>
+<img src="https://img.shields.io/badge/llama.cpp-b12008-3ddc84?style=for-the-badge&labelColor=0a1611" alt="llama.cpp"/>
+<img src="https://img.shields.io/badge/Windows_·_Linux_·_Android_·_Pi-3ddc84?style=for-the-badge&labelColor=0a1611" alt="platforms"/>
 
-![version](https://img.shields.io/badge/версия-0.4_(v2)-00e676)
-![platform](https://img.shields.io/badge/Windows_·_Linux_·_Android-7c4dff)
-![engine](https://img.shields.io/badge/движок-llama.cpp-ff4081)
-![license](https://img.shields.io/badge/бесплатно-open_source-00e676)
+### [Скачать](../../releases) · [Как запустить](#как-запустить) · [Linux](#linux) · [Второй ПК](#второй-пк--ноутбук-как-нода) · [Скорость](#насколько-быстро) · [Своя модель](#своя-модель) · [Что нового](#что-нового-в-v2-04) · [Поддержать](SUPPORT.md) · [English](README.en.md)
 
-[Скачать](../../releases) · [Как запустить](#как-запустить) · [Linux](#linux) · [Второй ПК](#второй-пк--ноутбук-как-нода) · [Скорость](#насколько-быстро) · [Своя модель](#своя-модель) · [Что нового](#что-нового-в-v2-04) · [Поддержать](SUPPORT.md) · [English](README.en.md)
+<img src="docs/brand/demo.gif" alt="Argus demo" width="100%"/>
+
+<sub>Кластер → модель → чат → четыре темы. Снято в демо-режиме.</sub>
 
 **Проект делает один человек на GTX 960. Если зашло — [закинь на железо](SUPPORT.md) ❤️**
 
-![Argus](docs/screens/cluster.jpg)
-
 </div>
+
+<table>
+<tr><td width="33%" valign="top"><h3>🧠 Модель больше видеокарты</h3>Слои делятся между GPU, процессором и телефонами</td><td width="33%" valign="top"><h3>📱 Старые телефоны в деле</h3>USB, USB-модем или Wi-Fi, без root</td><td width="33%" valign="top"><h3>🔌 API как у OpenAI</h3>Open WebUI, Jan, Continue, Hermes</td></tr>
+<tr><td width="33%" valign="top"><h3>🤖 Агент на твоём ПК</h3>Каждое действие подтверждаешь сам</td><td width="33%" valign="top"><h3>🐧 Linux и Raspberry Pi</h3>Нода одной командой или готовым образом</td><td width="33%" valign="top"><h3>🔒 Всё дома</h3>Без интернета, PIN-режим для нод</td></tr>
+</table>
 
 ## Что это
 
@@ -28,6 +34,7 @@ Root не нужен. На телефон ставится обычное при
 ## Как это работает
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#0f2a1e","primaryTextColor":"#eafff3","primaryBorderColor":"#3ddc84","lineColor":"#3ddc84","clusterBkg":"#0a1812","clusterBorder":"#2f6b4c","fontFamily":"Inter, Segoe UI, sans-serif"}}}%%
 flowchart LR
     U([Ты пишешь в чат]) --> PC
     subgraph PC["Компьютер"]
@@ -139,6 +146,12 @@ flowchart LR
 Многое из этого новое и ещё не обкатано на разном железе. Если что-то не работает, напиши в Issues и приложи журнал (кнопка «Копировать журнал»).
 
 ## Как запустить
+
+<p align="center">
+<a href="https://github.com/slopmaster1884/Project-argus/releases/latest/download/Argus-Setup.exe"><img src="https://img.shields.io/badge/⬇_Windows_—_Argus--Setup.exe-3ddc84?style=for-the-badge&labelColor=0a1611" alt="⬇_Windows_—_Argus--Setup.exe"/></a>
+<a href="../../releases/latest"><img src="https://img.shields.io/badge/⬇_Linux_—_AppImage_·_.deb-3ddc84?style=for-the-badge&labelColor=0a1611" alt="⬇_Linux_—_AppImage_·_.deb"/></a>
+<a href="https://github.com/slopmaster1884/Project-argus/releases/latest/download/Argus-Node.apk"><img src="https://img.shields.io/badge/⬇_Android_—_Argus_Node-3ddc84?style=for-the-badge&labelColor=0a1611" alt="⬇_Android_—_Argus_Node"/></a>
+</p>
 
 1. Скачай **Argus-Setup.exe** (Windows) или AppImage / .deb (Linux) из [релизов](../../releases) и установи.
 2. На телефоне: Настройки → О телефоне → 7 раз нажми «Номер сборки» → Параметры разработчика → **Отладка по USB**.
