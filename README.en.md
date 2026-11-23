@@ -11,8 +11,6 @@
 
 [Download](../../releases) · [Quick start](#quick-start) · [Linux](#linux) · [Second PC](#second-pc--laptop-as-a-node) · [Speed](#is-it-fast) · [Your own model](#your-own-model) · [What's new](#whats-new-in-v2-04) · [Support](SUPPORT.md) · [Русский](README.md)
 
-> **v2 (0.4) is coming.** This page already describes the new version; [releases](../../releases) currently have 0.3.4, and some features (new design, Check connection, PIN mode, wizard) arrive with 0.4. The node scripts work today.
-
 **Built by one person on a GTX 960. If it's useful to you, [chip in for test hardware](SUPPORT.md) ❤️**
 
 ![Argus](docs/screens/cluster.jpg)

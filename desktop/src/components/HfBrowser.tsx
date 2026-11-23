@@ -8,6 +8,7 @@ import { deploy } from "../lib/launch";
 import { gb } from "../lib/format";
 import type { ModelEntry } from "../lib/types";
 import { fitTag, hfUrl } from "./ModelLibrary";
+import ErrorBox from "./ErrorBox";
 
 interface HfModel { id: string; downloads: number; likes: number; tags?: string[]; lastModified?: string; createdAt?: string }
 interface GgufFile { file: string; label: string; quant?: string; bytes: number; parts: number }
@@ -48,7 +49,7 @@ export default function HfBrowser() {
           <ExternalLink size={12} /> на сайте
         </button>
       </form>
-      {err && <div className="m-2 border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{err}</div>}
+      {err && <ErrorBox error={err} className="m-2" />}
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10 bg-pl-bg1">
@@ -77,7 +78,7 @@ function Row({ m, open, toggle }: { m: HfModel; open: boolean; toggle: () => voi
   const moe = m.tags?.includes("moe") || /A\d+B/.test(m.id);
   return (
     <>
-      <tr onClick={toggle} className={clsx("cursor-pointer border-b border-pl-line", open ? "bg-pl-blue2/15" : "odd:bg-pl-bg1 even:bg-[#20252c] hover:bg-pl-bg3")}>
+      <tr onClick={toggle} className={clsx("cursor-pointer border-b border-pl-line", open ? "bg-pl-blue2/15" : "odd:bg-pl-bg1 even:bg-pl-bg2 hover:bg-pl-bg3")}>
         <td className="px-3 py-2">
           <div className="flex items-center gap-1.5">
             <ChevronRight size={12} className={clsx("text-pl-dim transition", open && "rotate-90")} />
@@ -132,7 +133,7 @@ function Files({ repo, vision, moe }: { repo: string; vision: boolean; moe: bool
     return () => { stop = true; };
   }, [repo]);
 
-  if (err) return <div className="p-3 font-mono text-2xs text-pl-red">{err}</div>;
+  if (err) return <ErrorBox error={err} className="m-3" />;
   if (!files) return <div className="flex items-center gap-2 p-3 font-mono text-2xs text-pl-dim"><Loader2 size={12} className="animate-spin" /> список файлов…</div>;
   if (!files.length) return <div className="p-3 font-mono text-2xs text-pl-dim">в репозитории нет .gguf файлов</div>;
 

@@ -38,7 +38,7 @@ export interface ClusterNode {
   speedMeasured: boolean;    // speed comes from a real measurement (false = estimate)
   role: NodeRole;            // chosen by the user
   assigned: NodeAssigned;    // what the current plan does with it
-  helper: HelperView | null; // «Помощник» status (experiment «Роли»)
+  helper: HelperView | null; // «Помощник» status («Роли»)
   // ---- 0.3.3 (eng-core): device temperature
   tempC?: number | null;     // °C (battery/SoC for phones), null = unknown
   throttled?: boolean;       // the device slows down from heat («греется»)
@@ -46,6 +46,8 @@ export interface ClusterNode {
   link?: NodeLink;           // how the PC reaches it right now
   tether?: boolean;          // «USB-модем» option is on (USB nodes)
   tetherHint?: string | null; // why USB-модем isn't used right now
+  // ---- secured RPC (rpcauth.rs, docs/SECURITY.md)
+  secure?: boolean;          // PIN-paired LAN node, reached only with its token («🔒 защищено»)
 }
 
 /** usb = adb forward, tether = Android USB tethering («USB-модем»), wifi = network */
@@ -69,6 +71,7 @@ export interface DiscoveredNode {
   id: string; endpoint: string; name: string; ramMb: number; freeMb: number;
   variant: string | null; ageSec: number; added: boolean;
   appVersion: string | null; appVc: number | null; outdated: boolean;
+  auth?: boolean;             // beacon "auth":1 — secured node, «Добавить» asks for its PIN (rpcauth.rs)
 }
 
 export type EngineStatus = "idle" | "loading" | "ready" | "broken";
@@ -139,7 +142,7 @@ export interface ClusterSnapshot {
   freeNodes: string[];           // online nodes the model doesn't need («Свободна»)
   estTps: number | null;         // rough tok/s estimate for the planned split
   fits: boolean;
-  rolesEnabled: boolean;         // experiment «Роли»
+  rolesEnabled: boolean;         // «Роли» (Помощник): on by default since 0.4 (was an experiment in 0.3.x)
   helperModel: string;           // id from helperModels or "owner/repo/file.gguf"
   helperModels: HelperModelView[];
   helpers: HelperView[];         // nodes with the «Помощник» role (any state)
@@ -288,3 +291,30 @@ export interface FeaturesView extends FeaturesConfig {
 
 /** route_target: which OpenAI-compatible backend answers a prompt */
 export interface RouteTarget { base: string; model: string; kind: "main" | "helper" }
+
+// ---- «Проверить связь» (netdiag.rs)
+export type DiagStepId = "subnet" | "beacon" | "tcp" | "hello";
+export interface DiagStep {
+  id: DiagStepId;
+  ok: boolean;
+  skipped: boolean;     // not run / could not be judged — shown as "–"
+  ms: number;
+  code: string;         // i18n: nd.code.<id>.<code>
+  arg: string | null;   // substituted for {x}
+  detail: string;       // raw technical detail (OS error, addresses)
+}
+export type DiagVerdict =
+  | "ok" | "firewall_likely" | "rpc_not_running" | "different_subnet" | "ap_isolation_likely"
+  | "version_mismatch" | "rpc_busy" | "unreachable" | "unknown";
+export type DiagHint =
+  | "linuxScript" | "linuxUfw" | "linuxFirewalld" | "windowsFirewall" | "restartNode" | "checkPort" | "sameWifi"
+  | "guestNetwork" | "checkIp" | "apIsolation" | "deviceOn" | "pcFirewall" | "updateNode" | "busy";
+export interface DiagReport {
+  ip: string;
+  port: number;
+  localIp: string | null;
+  steps: DiagStep[];
+  verdict: DiagVerdict;
+  hints: DiagHint[];
+  totalMs: number;
+}

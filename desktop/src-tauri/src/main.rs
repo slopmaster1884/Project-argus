@@ -7,6 +7,7 @@ mod cluster;
 mod gpu;
 mod helper;
 mod lan;
+mod netdiag;
 mod llama;
 mod settings;
 mod split;
@@ -24,6 +25,8 @@ mod vision;
 mod nodesvc;
 mod roles_extra;
 mod tether;
+mod rpcauth;
+mod route;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -92,6 +95,7 @@ fn main() {
             lan::set_auto_add,
             lan::remove_lan_node,
             lan::test_lan_node,
+            netdiag::diagnose_node,
             lan::set_node_weight,
             lan::set_node_enabled,
             lan::set_fast_start,
@@ -108,6 +112,7 @@ fn main() {
             helper::set_roles_enabled,
             helper::set_helper_model,
             helper::retry_helper,
+            helper::subtask_run,
             agent::platform_info,
             agent::agent_run_command,
             agent::agent_read_file,
@@ -127,6 +132,7 @@ fn main() {
             roles_extra::node_roles_get,
             roles_extra::set_node_voice,
             roles_extra::set_node_library,
+            roles_extra::set_node_search,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

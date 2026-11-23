@@ -57,7 +57,7 @@ export default function Tour() {
         <defs><mask id="tour-hole"><rect width="100%" height="100%" fill="white" />
           {rect && <rect x={rect.left - pad} y={rect.top - pad} width={rect.width + pad * 2} height={rect.height + pad * 2} fill="black" />}</mask></defs>
         <rect width="100%" height="100%" fill="rgba(0,0,0,0.62)" mask="url(#tour-hole)" />
-        {rect && <rect x={rect.left - pad} y={rect.top - pad} width={rect.width + pad * 2} height={rect.height + pad * 2} fill="none" stroke="#4C90F0" strokeWidth="1.5" strokeDasharray="4 3" />}
+        {rect && <rect x={rect.left - pad} y={rect.top - pad} width={rect.width + pad * 2} height={rect.height + pad * 2} fill="none" stroke="rgb(var(--pl-blue))" strokeWidth="1.5" strokeDasharray="4 3" />}
       </svg>
       <div className="absolute border border-pl-blue/70 bg-pl-bg1 shadow-2xl" style={{ left, top, width: W }}>
         <div className="flex h-8 items-center justify-between border-b border-pl-line bg-pl-bg2 px-3">

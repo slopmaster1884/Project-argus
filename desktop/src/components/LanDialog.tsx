@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Loader2, Wifi, X } from "lucide-react";
 import { useCluster } from "../store/cluster";
-import { addLanNode, testLanNode } from "../lib/api";
-import { Copy } from "lucide-react";
+import { addLanNode, isPinRequired, testLanNode } from "../lib/api";
+import { Copy, Stethoscope } from "lucide-react";
+import { useT } from "../lib/i18n";
+import ErrorBox from "./ErrorBox";
 
 const CMDS: { os: string; cmd: string }[] = [
   { os: "Linux / Pi (авто, с маяком)", cmd: "bash scripts/argus-node-linux.sh" },
+  { os: "Linux / Pi (защищённый, PIN)", cmd: "ARGUS_SECURE=1 bash scripts/argus-node-linux.sh" },
   { os: "Linux / Pi (вручную)", cmd: "./ggml-rpc-server -H 0.0.0.0 -p 50052 -c" },
   { os: "Windows (ноутбук/ПК)", cmd: "ggml-rpc-server.exe -H 0.0.0.0 -p 50052 -c" },
 ];
@@ -13,8 +16,11 @@ const CMDS: { os: string; cmd: string }[] = [
 /** "Добавить ноду по IP": host:port of a machine running llama.cpp rpc-server (b12008). */
 export default function LanDialog() {
   const setOpen = useCluster((s) => s.setLanDialog);
+  const setNetDiag = useCluster((s) => s.setNetDiag);
+  const t = useT();
   const [addr, setAddr] = useState("");
   const [name, setName] = useState("");
+  const [pin, setPin] = useState("");
   const [busy, setBusy] = useState<"test" | "add" | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -26,7 +32,9 @@ export default function LanDialog() {
   }
   async function add() {
     setBusy("add"); setMsg(null);
-    try { await addLanNode(normalized, name.trim() || undefined); setOpen(false); } catch (e) { setMsg({ ok: false, text: String(e) }); }
+    const p = pin.replace(/\D/g, "");
+    try { await addLanNode(normalized, name.trim() || undefined, p || undefined); setOpen(false); }
+    catch (e) { setMsg({ ok: false, text: String(e) }); }
     setBusy(null);
   }
 
@@ -49,8 +57,16 @@ export default function LanDialog() {
                 className="mt-1 h-8 w-full border border-pl-line2 bg-pl-bg0 px-2 text-sm text-pl-text outline-none focus:border-pl-blue" />
             </label>
           </div>
+          <label className="block text-xs"><span className="label">{t("sec.lanPin")}</span>
+            <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="123 456" inputMode="numeric" maxLength={7}
+              onKeyDown={(e) => { if (e.key === "Enter" && addr.trim()) add(); }}
+              className="mt-1 h-8 w-40 border border-pl-line2 bg-pl-bg0 px-2 font-mono text-sm tracking-[0.2em] text-pl-text outline-none focus:border-pl-blue" />
+            <span className="ml-2 text-2xs text-pl-dim">{t("sec.lanPinHint")}</span>
+          </label>
           <div className="font-mono text-2xs text-pl-dim">порт по умолчанию 50052 · будет: {normalized || "—"}</div>
-          {msg && <div className={`border-l-2 p-2 font-mono text-2xs ${msg.ok ? "border-pl-green bg-pl-green/10 text-pl-green" : "border-pl-red bg-pl-red/10 text-pl-red"}`}>{msg.text}</div>}
+          {msg?.ok && <div className="border-l-2 border-pl-green bg-pl-green/10 p-2 font-mono text-2xs text-pl-green">{msg.text}</div>}
+          {msg && !msg.ok && <div><ErrorBox error={msg.text} />
+            {!isPinRequired(msg.text) && <button className="btn mt-1.5 h-6" onClick={() => setNetDiag({ address: normalized })}><Stethoscope size={11} /> {t("nd.button")}</button>}</div>}
 
           <div className="border border-pl-line bg-pl-bg0 p-3 text-xs leading-5 text-pl-mute">
             <div className="label mb-1">Как запустить ноду на Pi / ноутбуке</div>
@@ -62,12 +78,14 @@ export default function LanDialog() {
             {CMDS.map((c) => <Cmd key={c.os} os={c.os} cmd={c.cmd} />)}
             <div className="mt-2 border-l-2 border-pl-orange bg-pl-orange/10 p-2 text-2xs text-pl-orange">
               Только закрытая домашняя сеть! У rpc-server нет пароля и шифрования: любой в этой сети может подключиться и выполнять вычисления. Не открывайте порт 50052 в интернет и не запускайте в публичном Wi‑Fi.
+              {" "}Защищённый режим (<span className="font-mono">ARGUS_SECURE=1</span> / «Защищённый режим» в Argus Node) пускает только ПК, сопряжённые по PIN; шифрования он не добавляет.
             </div>
             <div className="mt-2 text-2xs text-pl-dim">Ключ <span className="font-mono">-c</span> кэширует веса на диске ноды — повторная загрузка модели быстрее. Сеть: Ethernet ≫ Wi‑Fi.</div>
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-pl-line bg-pl-bg2 px-3 py-2">
           <button className="btn" onClick={() => setOpen(false)}>Отмена</button>
+          <button className="btn mr-auto" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address: normalized })}><Stethoscope size={12} /> {t("nd.button")}</button>
           <button className="btn" disabled={!addr.trim() || !!busy} onClick={test}>{busy === "test" && <Loader2 size={12} className="animate-spin" />} Проверить</button>
           <button className="btn-primary" disabled={!addr.trim() || !!busy} onClick={add}>{busy === "add" && <Loader2 size={12} className="animate-spin" />} Добавить</button>
         </div>

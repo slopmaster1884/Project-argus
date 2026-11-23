@@ -1,12 +1,13 @@
 [package]
 name = "usb-cluster"
-version = "0.3.4"
+version = "0.4.0"
 edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22"
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -19,9 +20,11 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 sha2 = "0.10"
 # «Знания»/«Очередь»: .docx is a ZIP (deflate), PDF streams are zlib
 flate2 = "1"
+# opt-in secured RPC (rpcauth.rs): SPAKE2 pairing over a 2048-bit MODP group + OS randomness for tokens
+num-bigint = "0.4"
+getrandom = "0.2"
 
 # Agent mode: screenshot + mouse/keyboard (Windows only; stubs elsewhere)
 [target.'cfg(windows)'.dependencies]
 xcap = "0.9"
 enigo = "0.6"
-base64 = "0.22"

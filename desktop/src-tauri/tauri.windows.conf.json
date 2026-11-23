@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Argus — Local Compute Cluster",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 600,
+        "transparent": true,
+        "windowEffects": { "effects": ["mica", "acrylic"] }
+      }
+    ]
+  }
+}

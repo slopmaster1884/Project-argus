@@ -12,6 +12,10 @@
 //! 0.3.1: every beacon source gets a unicast reply (≤ 1 per 10 s per node)
 //! `{"argus":"host","v":1,"update_port":50055,"node_vc":N}` so the node app learns the PC address and can
 //! offer (ASK) an update from http://<pc>:50055/node.apk. Beacons carry "vn"/"vc" ⇒ «Нода устарела».
+//!
+//! Secured RPC (opt-in, rpcauth.rs, docs/SECURITY.md): a node with `"auth":1` in its beacon is added with
+//! its 6-digit PIN; the token from the pairing is kept in settings and every connection to that node
+//! (health checks here, llama-server through a local forwarder) is authenticated.
 use crate::settings::{parse_host_port, LanNode};
 use crate::beacon::{host_reply, parse_beacon, Discovered};
 use crate::state::{AppState, Node, NodeStage};
@@ -20,7 +24,7 @@ use std::{collections::HashMap, sync::{Arc, OnceLock}, time::Duration};
 use tauri::{AppHandle, State};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, UdpSocket}, time::{sleep, timeout}};
 
-const RPC_PROTO_MAJOR: u8 = 8; // ggml/include/ggml-rpc.h @ b12008
+pub const RPC_PROTO_MAJOR: u8 = 8; // ggml/include/ggml-rpc.h @ b12008
 const CMD_GET_DEVICE_MEMORY: u8 = 11;
 const CMD_HELLO: u8 = 14;
 const CMD_DEVICE_COUNT: u8 = 15;
@@ -50,13 +54,29 @@ async fn recv(s: &mut TcpStream, expect: usize) -> Result<Vec<u8>> {
     Ok(v)
 }
 
-pub async fn rpc_query(endpoint: &str) -> Result<RpcInfo> {
-    let mut s = timeout(Duration::from_millis(1500), TcpStream::connect(endpoint)).await
-        .map_err(|_| anyhow::anyhow!("таймаут подключения"))??;
+/// what a secured gateway says first (rpcauth::MAGIC) when read as an rpc reply size
+const SECURED_PREFIX: &[u8] = b"ARGUS1 ";
+pub const SECURED_MSG: &str = "нода в защищённом режиме — удалите её и добавьте заново с PIN-кодом с экрана ноды";
+
+pub async fn rpc_query(endpoint: &str) -> Result<RpcInfo> { rpc_query_with(endpoint, None).await }
+
+/// `token`: PIN-paired node — authenticate first (rpcauth handshake), then the same queries.
+pub async fn rpc_query_with(endpoint: &str, token: Option<&crate::rpcauth::Token>) -> Result<RpcInfo> {
+    let mut s = match token {
+        Some(t) => crate::rpcauth::connect_authed(endpoint, t).await?,
+        None => timeout(Duration::from_millis(1500), TcpStream::connect(endpoint)).await
+            .map_err(|_| anyhow::anyhow!("таймаут подключения"))??,
+    };
     s.set_nodelay(true).ok();
     let io = async {
         send(&mut s, CMD_HELLO, &[0u8; CONN_CAPS]).await?;
-        let h = recv(&mut s, 4 + CONN_CAPS).await?;
+        let mut sz = [0u8; 8];
+        s.read_exact(&mut sz).await?;
+        if sz.starts_with(SECURED_PREFIX) { bail!("{SECURED_MSG}"); }
+        let n = u64::from_le_bytes(sz) as usize;
+        if n != 4 + CONN_CAPS { bail!("unexpected RPC reply size {n} (expected {})", 4 + CONN_CAPS); }
+        let mut h = vec![0u8; n];
+        s.read_exact(&mut h).await?;
         let version = (h[0], h[1], h[2]);
         if version.0 != RPC_PROTO_MAJOR {
             bail!("rpc-server протокол v{}.{}.{} — нужен v{RPC_PROTO_MAJOR}.x (llama.cpp b12008)", h[0], h[1], h[2]);
@@ -74,6 +94,27 @@ pub async fn rpc_query(endpoint: &str) -> Result<RpcInfo> {
     };
     // a busy server (another client attached) never answers HELLO
     timeout(Duration::from_millis(2500), io).await.map_err(|_| anyhow::anyhow!("rpc-server занят другим клиентом или не отвечает"))?
+}
+
+/// HELLO only (netdiag «Проверить связь»): the rpc-server protocol version, or an error.
+/// Unlike `rpc_query` it does not judge the version — the caller compares it with `RPC_PROTO_MAJOR`.
+pub async fn rpc_hello(endpoint: &str, wait: Duration) -> Result<(u8, u8, u8)> {
+    let mut s = timeout(wait, TcpStream::connect(endpoint)).await
+        .map_err(|_| anyhow::anyhow!("connect timeout"))??;
+    s.set_nodelay(true).ok();
+    let io = async {
+        send(&mut s, CMD_HELLO, &[0u8; CONN_CAPS]).await?;
+        let mut sz = [0u8; 8];
+        s.read_exact(&mut sz).await?;
+        // a PIN-secured node's gateway greets first with the rpcauth magic
+        if sz.starts_with(SECURED_PREFIX) { bail!("secured gateway (PIN mode)"); }
+        let n = u64::from_le_bytes(sz) as usize;
+        if n != 4 + CONN_CAPS { bail!("unexpected RPC reply size {n} (expected {})", 4 + CONN_CAPS); }
+        let mut h = vec![0u8; n];
+        s.read_exact(&mut h).await?;
+        Ok::<_, anyhow::Error>((h[0], h[1], h[2]))
+    };
+    timeout(wait, io).await.map_err(|_| anyhow::anyhow!("HELLO timeout"))?
 }
 
 async fn tcp_alive(endpoint: &str) -> bool {
@@ -116,7 +157,7 @@ pub fn start_beacon_listener(app: AppHandle, st: Arc<AppState>) {
                         if reply_due(&d.host) {
                             let helper = crate::helper::lan_assignment(&st, &d.id()).await;
                             let msg = host_reply(crate::updater::NODE_UPDATE_PORT, crate::cluster::bundled_code(&st.bundled_node_version), false, Some(helper));
-                            let msg = crate::roles_extra::extend_lan_reply(msg, &d.id());
+                            let msg = crate::roles_extra::extend_lan_reply(msg, &d.id(), d.free_mb, d.roles.as_ref());
                             if let Err(e) = sock.send_to(&msg, src).await { log::debug!("beacon reply {src}: {e}"); }
                         }
                         on_beacon(&app, &st, d).await;
@@ -164,7 +205,10 @@ async fn on_beacon(app: &AppHandle, st: &Arc<AppState>, d: Discovered) {
     if !is_new { return; }
     let auto = st.settings.lock().await.auto_add_discovered;
     let known = st.settings.lock().await.lan_nodes.iter().any(|l| l.id() == id);
-    if auto && !known {
+    if !known && d.auth {
+        // secured node: never auto-added (it needs the PIN shown on the node)
+        crate::cluster::toast(app, "info", &format!("Найдена защищённая нода «{}» ({}) — «Добавить» и PIN с экрана ноды", d.name, d.endpoint()));
+    } else if auto && !known {
         if add_node(st, LanNode { host: d.host.clone(), port: d.port, name: d.name.clone(), auto: true }).await.is_ok() {
             crate::cluster::toast(app, "info", &format!("Добавлена Wi-Fi нода «{}» ({})", d.name, d.endpoint()));
         }
@@ -185,7 +229,7 @@ enum Check { Online { info: Option<RpcInfo>, rtt: Option<f32> }, Down(String), F
 /// * a beacon node goes OFFLINE 10 s after its last beacon;
 /// * other failures need 2 checks in a row (Wi-Fi hiccups must not kill a running model).
 pub async fn refresh(st: &Arc<AppState>) {
-    let list = st.settings.lock().await.lan_nodes.clone();
+    let (list, tokens) = { let s = st.settings.lock().await; (s.lan_nodes.clone(), s.rpc_tokens.clone()) };
     {
         let mut nodes = st.nodes.lock().await;
         let ids: Vec<String> = list.iter().map(|l| l.id()).collect();
@@ -209,6 +253,7 @@ pub async fn refresh(st: &Arc<AppState>) {
         // UDP or a busy :50053 must not leave an auto-added node OFFLINE forever — TCP/RPC checks take over
         let tracked = beacon.is_some();
         let is_attached = attached.contains(&ep);
+        let token = tokens.get(&id).and_then(|h| crate::rpcauth::token_from_hex(h));
         set.spawn(async move {
             if tracked && beacon.as_ref().map(|b| b.last_seen.elapsed() > BEACON_LOST).unwrap_or(false) {
                 return (id, beacon, Check::Fatal("Wi-Fi маяк пропал (> 10 с): нода выключена или вне сети".into()));
@@ -217,13 +262,13 @@ pub async fn refresh(st: &Arc<AppState>) {
             let r = if is_attached {
                 if tcp_alive(&ep).await { Check::Online { info: None, rtt: None } } else { Check::Down("нет TCP-ответа".into()) }
             } else {
-                match rpc_query(&ep).await {
+                match rpc_query_with(&ep, token.as_ref()).await {
                     // HELLO + DEVICE_COUNT + GET_DEVICE_MEMORY (+ connect) ≈ 4 round trips
                     Ok(info) if !info.mem.is_empty() => Check::Online { rtt: Some(t0.elapsed().as_secs_f32() * 1000.0 / (3 + info.mem.len()) as f32), info: Some(info) },
                     Ok(_) => Check::Fatal("rpc-server не сообщил ни одного устройства".into()),
                     Err(e) => {
                         let msg = format!("{e:#}");
-                        if msg.contains("протокол") { Check::Fatal(msg) } else { Check::Down(msg) }
+                        if msg.contains("протокол") || msg.contains("PIN") || msg.contains("защищ") { Check::Fatal(msg) } else { Check::Down(msg) }
                     }
                 }
             };
@@ -241,6 +286,7 @@ pub async fn refresh(st: &Arc<AppState>) {
         let mut nodes = st.nodes.lock().await;
         let Some(n) = nodes.get_mut(&id) else { continue };
         n.beacon = beacon.is_some();
+        n.secure = tokens.contains_key(&id);
         if let Some(b) = &beacon {
             n.variant = b.variant.clone();
             if b.bench.is_some() { n.bench_gbps = b.bench; }
@@ -267,7 +313,7 @@ pub async fn refresh(st: &Arc<AppState>) {
                 n.error = None;
             }
             Check::Fatal(msg) => {
-                n.stage = if msg.contains("протокол") || msg.contains("устройства") { NodeStage::Error } else { NodeStage::Offline };
+                n.stage = if msg.contains("протокол") || msg.contains("устройства") || msg.contains("PIN") || msg.contains("защищ") { NodeStage::Error } else { NodeStage::Offline };
                 n.error = Some(msg);
             }
             Check::Down(msg) => {
@@ -285,33 +331,53 @@ fn display_name(l: &LanNode) -> String {
 }
 
 async fn add_node(st: &Arc<AppState>, node: LanNode) -> Result<String, String> {
+    add_node_tok(st, node, None).await
+}
+
+/// `token` (from PIN pairing) is stored with the node; re-pairing an already added node just replaces it.
+async fn add_node_tok(st: &Arc<AppState>, node: LanNode, token: Option<crate::rpcauth::Token>) -> Result<String, String> {
     let id = node.id();
     {
         let mut s = st.settings.lock().await;
-        if s.lan_nodes.iter().any(|n| n.id() == id) { return Err("эта нода уже добавлена".into()); }
-        s.lan_nodes.push(node);
+        let known = s.lan_nodes.iter().any(|n| n.id() == id);
+        if known && token.is_none() { return Err("эта нода уже добавлена".into()); }
+        if let Some(t) = token { s.rpc_tokens.insert(id.clone(), crate::rpcauth::hex(&t)); }
+        if !known { s.lan_nodes.push(node); }
     }
+    fail_counts().lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
     st.save_settings().await;
     Ok(id)
+}
+
+/// PIN given → pair with the node first; no PIN but the node is secured → ask for it.
+async fn pair_if_needed(endpoint: &str, pin: Option<String>) -> Result<Option<crate::rpcauth::Token>, String> {
+    match pin.filter(|p| !p.trim().is_empty()) {
+        Some(pin) => crate::rpcauth::pair(endpoint, &pin).await.map(Some).map_err(|e| format!("сопряжение с {endpoint}: {e:#}")),
+        None if crate::rpcauth::is_secured(endpoint).await => Err(format!("PIN_REQUIRED: {SECURED_MSG}")),
+        None => Ok(None),
+    }
 }
 
 // ---------------------------------------------------------------- commands
 
 #[tauri::command]
-pub async fn add_lan_node(state: State<'_, Arc<AppState>>, address: String, name: Option<String>) -> Result<String, String> {
+pub async fn add_lan_node(state: State<'_, Arc<AppState>>, address: String, name: Option<String>, pin: Option<String>) -> Result<String, String> {
     let (host, port) = parse_host_port(&address)?;
     let st = state.inner().clone();
-    let id = add_node(&st, LanNode { host, port, name: name.unwrap_or_default(), auto: false }).await?;
+    let token = pair_if_needed(&format!("{host}:{port}"), pin).await?;
+    let id = add_node_tok(&st, LanNode { host, port, name: name.unwrap_or_default(), auto: false }, token).await?;
     refresh(&st).await;
     Ok(id)
 }
 
-/// "Добавить" in the "Найдено в сети" list.
+/// "Добавить" in the "Найдено в сети" list (`pin`: the node's beacon says `"auth":1`; also re-pairs an added node).
 #[tauri::command]
-pub async fn add_discovered_node(state: State<'_, Arc<AppState>>, id: String) -> Result<String, String> {
+pub async fn add_discovered_node(state: State<'_, Arc<AppState>>, id: String, pin: Option<String>) -> Result<String, String> {
     let st = state.inner().clone();
     let d = st.discovered.lock().await.get(&id).cloned().ok_or("нода больше не видна в сети")?;
-    let id = add_node(&st, LanNode { host: d.host.clone(), port: d.port, name: d.name.clone(), auto: true }).await?;
+    if d.auth && pin.as_deref().map(str::trim).unwrap_or("").is_empty() { return Err(format!("PIN_REQUIRED: {SECURED_MSG}")); }
+    let token = pair_if_needed(&d.endpoint(), pin).await?;
+    let id = add_node_tok(&st, LanNode { host: d.host.clone(), port: d.port, name: d.name.clone(), auto: true }, token).await?;
     refresh(&st).await;
     Ok(id)
 }
@@ -325,7 +391,11 @@ pub async fn set_auto_add(state: State<'_, Arc<AppState>>, enabled: bool) -> Res
 
 #[tauri::command]
 pub async fn remove_lan_node(state: State<'_, Arc<AppState>>, id: String) -> Result<(), String> {
-    state.settings.lock().await.lan_nodes.retain(|n| n.id() != id);
+    {
+        let mut s = state.settings.lock().await;
+        s.lan_nodes.retain(|n| n.id() != id);
+        s.rpc_tokens.remove(&id);
+    }
     state.nodes.lock().await.remove(&id);
     fail_counts().lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
     state.save_settings().await;
@@ -337,6 +407,9 @@ pub async fn remove_lan_node(state: State<'_, Arc<AppState>>, id: String) -> Res
 pub async fn test_lan_node(address: String) -> Result<String, String> {
     let (host, port) = parse_host_port(&address)?;
     let ep = format!("{host}:{port}");
+    if crate::rpcauth::is_secured(&ep).await {
+        return Ok("🔒 защищённая нода: введите PIN с экрана ноды и нажмите «Добавить»".into());
+    }
     let info = rpc_query(&ep).await.map_err(|e| format!("{e:#}"))?;
     let free: u64 = info.mem.iter().map(|m| m.0).sum::<u64>() / 1024 / 1024;
     let total: u64 = info.mem.iter().map(|m| m.1).sum::<u64>() / 1024 / 1024;
@@ -374,7 +447,7 @@ pub async fn wifi_node_update(state: State<'_, Arc<AppState>>, id: String) -> Re
     if d.src_port == 0 { return Err("адрес ответа ноды неизвестен — подождите пару секунд".into()); }
     let helper = crate::helper::lan_assignment(&state, &id).await;
     let msg = host_reply(crate::updater::NODE_UPDATE_PORT, crate::cluster::bundled_code(&state.bundled_node_version), true, Some(helper));
-    let msg = crate::roles_extra::extend_lan_reply(msg, &id);
+    let msg = crate::roles_extra::extend_lan_reply(msg, &id, d.free_mb, d.roles.as_ref());
     let sock = UdpSocket::bind(("0.0.0.0", 0)).await.map_err(|e| e.to_string())?;
     sock.send_to(&msg, (d.host.as_str(), d.src_port)).await.map_err(|e| e.to_string())?;
     Ok(format!("Запрос отправлен на «{}» — подтвердите обновление на самом устройстве", d.name))

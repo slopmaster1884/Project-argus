@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { Columns3, Cpu, FlaskConical, Gauge, Loader2, Share2, Thermometer, PanelRight, Plug, Plus, Radar, RefreshCw, RotateCw, ShieldAlert, Trash2, Usb, Wifi } from "lucide-react";
+import { Columns3, Cpu, FlaskConical, Gauge, Loader2, Share2, Thermometer, PanelRight, Plug, Plus, Radar, RefreshCw, RotateCw, ShieldAlert, Stethoscope, Trash2, Usb, Wifi } from "lucide-react";
+import { useT, tr } from "../lib/i18n";
 import clsx from "clsx";
 import { useCluster } from "../store/cluster";
 import {
   addDiscoveredNode, exportBenchResults, planSplit, rebenchNode, reconnectNode, rescan, removeLanNode, restartEngine, retryHelper, setAutoAdd, setHelperModel, setNodeEnabled,
-  setNodeRole, setNodeWeight, setRolesEnabled, setUsbTether, updateUsbNode, wifiNodeUpdate,
+  setNodeRole, setNodeWeight, setRolesEnabled, setUsbTether, updateUsbNode, wifiNodeUpdate, isPinRequired,
 } from "../lib/api";
+import { t } from "../lib/i18n";
+import PinDialog from "./PinDialog";
 import { Toggle } from "./ChatView";
 import EngineBanner from "./EngineBanner";
 import NodeExtraRoles from "./NodeExtraRoles";
@@ -16,21 +19,26 @@ import Meter, { loadTone, Progress } from "./Meter";
 import Drawer from "./Drawer";
 import { helperPct, isDownloadPhase, useWide } from "../lib/ui";
 import type { ClusterNode, ClusterSnapshot, DiscoveredNode, HelperState, HelperView, NodeRole, NodeStage, SplitPlan } from "../lib/types";
+import { toastError } from "../lib/errors";
+import ErrorBox from "./ErrorBox";
 
 export const stageTag: Record<NodeStage, [string, string]> = {
-  connected: ["ONLINE", "border-pl-green/50 text-pl-green"],
+  connected: [tr("В СЕТИ", "ONLINE"), "border-pl-green/50 text-pl-green"],
   unauthorized: ["AUTH REQUIRED", "border-pl-orange/50 text-pl-orange animate-blink"],
   installing: ["INSTALLING", "border-pl-blue/50 text-pl-blue animate-blink"],
   updating: ["UPDATING", "border-pl-blue/50 text-pl-blue animate-blink"],
   forwarding: ["FORWARDING", "border-pl-blue/50 text-pl-blue animate-blink"],
   starting: ["STARTING", "border-pl-blue/50 text-pl-blue animate-blink"],
   syncing: ["SYNCING", "border-pl-blue/50 text-pl-blue animate-blink"],
-  offline: ["OFFLINE", "border-pl-line2 text-pl-dim"],
+  offline: [tr("НЕ В СЕТИ", "OFFLINE"), "border-pl-line2 text-pl-dim"],
   error: ["FAULT", "border-pl-red/50 text-pl-red"],
 };
 
 export const TransportBadge = ({ n }: { n: ClusterNode }) =>
-  n.transport === "lan" ? <span className="tag border border-pl-cyan/60 text-pl-cyan">{n.beacon ? "Wi-Fi" : "LAN"}</span>
+  n.transport === "lan" ? <>
+    <span className="tag border border-pl-cyan/60 text-pl-cyan">{n.beacon ? "Wi-Fi" : "LAN"}</span>
+    {n.secure && <span className="tag ml-1 whitespace-nowrap border border-pl-green/60 text-pl-green" title={t("sec.badgeHint")}>{t("sec.badge")}</span>}
+  </>
   : n.transport === "usb" && n.link === "tether" && n.stage === "connected"
     ? <span className="tag whitespace-nowrap border border-pl-green/60 text-pl-green" title="Связь через USB-модем телефона (сеть по кабелю), без adb-проброса">USB-модем</span>
   : n.transport === "usb" ? <span className="tag border border-pl-line2 text-pl-mute" title={n.tether && n.tetherHint ? n.tetherHint : undefined}>USB</span>
@@ -42,7 +50,7 @@ export const ROLE_HINT: Record<NodeRole, string> = {
   auto: "Argus сам решает: нода берёт слои, только если модель без неё не помещается",
   model: "Всегда держит часть слоёв модели, даже если хватает остальных",
   free: "Не участвует в модели — устройство остаётся свободным",
-  helper: "Запускает свою маленькую модель рядом с основной (эксперимент «Роли»)",
+  helper: "Запускает свою маленькую модель рядом с основной: названия чатов, сводки, очередь, подзадачи агента",
 };
 const roleChoices = (snap: ClusterSnapshot, cur: NodeRole): NodeRole[] =>
   (["auto", "model", "free", "helper"] as NodeRole[]).filter((r) => r !== "helper" || snap.rolesEnabled || cur === "helper");
@@ -78,7 +86,8 @@ const fmtTps = (t: number | null | undefined) => (t == null ? null : t >= 10 ? t
 export const tableNodes = (s: ClusterSnapshot) => [...(s.gpus.length ? s.gpus : [s.host]), ...s.nodes];
 
 export default function DevicePanel() {
-  const { snapshot, setWizard, setLanDialog, pushToast } = useCluster();
+  const { snapshot, setWizard, setLanDialog, setNetDiag, pushToast } = useCluster();
+  const t = useT();
   const [sel, setSel] = useState("host");
   const [restarting, setRestarting] = useState(false);
   const wide = useWide();
@@ -95,17 +104,18 @@ export default function DevicePanel() {
         <MemoryPool />
         <div className="panel">
           <div className="panel-head h-auto min-h-8 flex-wrap gap-x-3 gap-y-1 py-1">
-            <span>Topology</span>
+            <span>{tr("Топология", "Topology")}</span>
             <div className="ml-auto flex flex-wrap justify-end gap-1.5 normal-case tracking-normal">
-              <button className="btn" title="Повторить подготовку упавших устройств, перезапустить adb при сбое" onClick={() => rescan()}><RefreshCw size={12} /> Rescan</button>
+              <button className="btn" title="Повторить подготовку упавших устройств, перезапустить adb при сбое" onClick={() => rescan()}><RefreshCw size={12} /> {tr("Обновить", "Rescan")}</button>
               {snapshot.engine.canRestart && (
                 <button className="btn" disabled={restarting} title="Перезапустить llama-server с текущим набором нод"
-                  onClick={async () => { setRestarting(true); try { await restartEngine(); pushToast("info", "Движок перезапускается…"); } catch (e) { pushToast("error", String(e)); } setRestarting(false); }}>
+                  onClick={async () => { setRestarting(true); try { await restartEngine(); pushToast("info", "Движок перезапускается…"); } catch (e) { toastError(e); } setRestarting(false); }}>
                   {restarting ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Перезапустить движок
                 </button>
               )}
               <button className="btn" data-tour="lan" onClick={() => setLanDialog(true)}><Wifi size={12} /> Добавить ноду по IP</button>
-              <button className="btn-primary" data-tour="usb" onClick={() => setWizard(true)}><Usb size={12} /> Connect via USB</button>
+              <button className="btn" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address: "" })}><Stethoscope size={12} /> {t("nd.button")}</button>
+              <button className="btn-primary" data-tour="usb" onClick={() => setWizard(true)}><Usb size={12} /> {tr("Подключить по USB", "Connect via USB")}</button>
               {!wide && <button className="btn" title="Inspector: свойства выбранного устройства" onClick={() => setInsp(true)}><PanelRight size={12} /> Inspector</button>}
             </div>
           </div>
@@ -115,7 +125,7 @@ export default function DevicePanel() {
         <RolesPanel snap={snapshot} />
         <DiscoveredPanel snap={snapshot} />
       </div>
-      <Drawer wide={wide} open={insp} onClose={() => setInsp(false)} title="Inspector" width={320}>
+      <Drawer wide={wide} open={insp} onClose={() => setInsp(false)} title={tr("Инспектор", "Inspector")} width={320}>
         <Inspector node={current} snap={snapshot} />
       </Drawer>
     </div>
@@ -138,7 +148,7 @@ function ShareBench() {
       onClick={async (e) => {
         e.stopPropagation(); setBusy(true);
         try { await navigator.clipboard.writeText(await exportBenchResults()); pushToast("ok", "Результаты скопированы — вставьте их, куда нужно"); }
-        catch (er) { pushToast("error", `Не получилось скопировать: ${String(er)}`); }
+        catch (er) { toastError(er, "error", "Не получилось скопировать"); }
         setBusy(false);
       }}>
       {busy ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} Поделиться результатами
@@ -169,9 +179,9 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
   const cpuLayers = plan?.cpuLayers;
   return (
     <div className="panel">
-      <div className="panel-head gap-3"><span className="shrink-0">Nodes</span>
+      <div className="panel-head gap-3"><span className="shrink-0">{tr("Ноды", "Nodes")}</span>
         <span className="min-w-0 truncate font-mono normal-case tracking-normal text-pl-dim">
-          {nodes.length} objects<span className="hidden xl:inline"> · быстрые устройства заполняются первыми</span>
+          {nodes.length} {tr("шт.", "objects")}<span className="hidden xl:inline"> · быстрые устройства заполняются первыми</span>
           {snap.estTps != null && <span className="ml-2 text-pl-gold" title="Грубая оценка по скорости и RTT нод для последней модели">≈ {fmtTps(snap.estTps)} ток/с</span>}
           {snap.needMb != null && !snap.fits && <span className="ml-2 text-pl-red">модель не помещается</span>}
         </span>
@@ -181,7 +191,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
       <table className="w-full min-w-[1000px] text-xs">
         <thead>
           <tr className="border-b border-pl-line text-left">
-            {["Node", "Link", "Status", "Endpoint / device", "Memory", "Allocatable", "Скорость", "RTT", "Роль", "Split", "Load"].map((h) =>
+            {[tr("Нода", "Node"), tr("Связь", "Link"), tr("Статус", "Status"), tr("Адрес / устройство", "Endpoint / device"), tr("Память", "Memory"), tr("Доступно", "Allocatable"), "Скорость", "RTT", "Роль", tr("Доля", "Split"), tr("Нагрузка", "Load")].map((h) =>
               <th key={h} className="label whitespace-nowrap px-3 py-1.5 font-semibold">{h}</th>)}
           </tr>
         </thead>
@@ -193,7 +203,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
             return (
               <tr key={n.id} onClick={() => onSel(n.id)}
                 className={clsx("cursor-pointer border-b border-pl-line last:border-0",
-                  sel === n.id ? "bg-pl-blue2/20" : "odd:bg-pl-bg1 even:bg-[#20252c] hover:bg-pl-bg3", !n.enabled && "opacity-50")}>
+                  sel === n.id ? "bg-pl-blue2/20" : "odd:bg-pl-bg1 even:bg-pl-bg2 hover:bg-pl-bg3", !n.enabled && "opacity-50")}>
                 <td className="max-w-[180px] px-3 py-2 font-sans text-pl-text" title={n.name}>{n.name}{!n.enabled && <span className="ml-1.5 text-2xs text-pl-dim">(выкл)</span>}</td>
                 <td className="px-3 py-2"><TransportBadge n={n} /></td>
                 <td className="min-w-[150px] px-3 py-2">
@@ -206,6 +216,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
                   {n.updateAvailable && <span title={`установлена ${n.appVersion ?? n.version ?? "?"}, в комплекте ${n.updateAvailable}`} className="tag border border-pl-orange/50 text-pl-orange">Нода устарела</span>}
                   </div>
                   {n.stage === "error" && n.retryIn != null && <div className="mt-0.5 text-2xs text-pl-dim">повтор через {n.retryIn} с · попытка {n.attempts + 1}</div>}
+                  {needsDiag(n) && <DiagButton n={n} small />}
                 </td>
                 <td className="max-w-[170px] truncate px-3 py-2 text-pl-mute" title={n.device ?? n.endpoint ?? undefined}>{n.device ?? n.endpoint ?? (n.transport === "local" ? "local" : "—")}</td>
                 <td className="w-36 px-3 py-2">
@@ -217,7 +228,7 @@ function NodeTable({ nodes, sel, onSel, snap }: { nodes: ClusterNode[]; sel: str
                 <td className="whitespace-nowrap px-3 py-2 text-pl-mute">{n.rttMs != null ? `${n.rttMs.toFixed(1)} мс` : "—"}</td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   {n.transport === "local" ? <span className="whitespace-nowrap font-sans text-2xs text-pl-dim">всегда в модели</span> : (
-                    <select value={n.role} title={ROLE_HINT[n.role]} onChange={(e) => setNodeRole(n.id, e.target.value as NodeRole).catch((er) => pushToast("error", String(er)))}
+                    <select value={n.role} title={ROLE_HINT[n.role]} onChange={(e) => setNodeRole(n.id, e.target.value as NodeRole).catch((er) => toastError(er))}
                       className="h-6 border border-pl-line2 bg-pl-bg3 px-1 font-sans text-2xs text-pl-text">
                       {roleChoices(snap, n.role).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                     </select>
@@ -261,29 +272,29 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
   useEffect(() => setW(node.weight), [node.id, node.weight]);
   const isHostAgg = node.id === "host";
   const rows: [string, string][] = [
-    ["Object ID", node.id], ["Class", node.transport === "local" ? (node.kind === "gpu" ? "Local GPU" : "Host") : "RPC Node"],
-    ["Device type", node.integrated ? "integrated gpu" : node.kind],
-    ["Transport", node.transport === "local" ? `local${node.device ? ` (${node.device})` : ""}` : node.transport === "lan" ? "LAN · TCP" : node.link === "tether" ? "USB-модем · TCP" : "USB · adb forward"],
-    ["Endpoint", node.endpoint ?? "—"], ["Version", node.version ?? (node.transport === "usb" ? "—" : "b12008")],
-    ["Total memory", `${gb(node.totalMb, 2)} GB`], ["Free now", `${gb(node.availableMb, 2)} GB`],
-    ["Allocatable", `${gb(node.usableMb, 2)} GB`], ["Load", `${node.loadPct.toFixed(1)} %`],
+    [tr("ID", "Object ID"), node.id], [tr("Класс", "Class"), node.transport === "local" ? (node.kind === "gpu" ? tr("Видеокарта ПК", "Local GPU") : tr("Этот ПК", "Host")) : "RPC Node"],
+    [tr("Тип устройства", "Device type"), node.integrated ? "integrated gpu" : node.kind],
+    [tr("Подключение", "Transport"), node.transport === "local" ? `local${node.device ? ` (${node.device})` : ""}` : node.transport === "lan" ? "LAN · TCP" : node.link === "tether" ? "USB-модем · TCP" : "USB · adb forward"],
+    [tr("Адрес", "Endpoint"), node.endpoint ?? "—"], [tr("Версия", "Version"), node.version ?? (node.transport === "usb" ? "—" : "b12008")],
+    [tr("Всего памяти", "Total memory"), `${gb(node.totalMb, 2)} GB`], [tr("Свободно сейчас", "Free now"), `${gb(node.availableMb, 2)} GB`],
+    [tr("Доступно", "Allocatable"), `${gb(node.usableMb, 2)} GB`], [tr("Нагрузка", "Load"), `${node.loadPct.toFixed(1)} %`],
   ];
-  if (node.transport === "usb" && node.version && node.version !== snap.bundledNodeVersion) rows.push(["Bundled node", snap.bundledNodeVersion]);
-  if (node.transport === "lan") rows.push(["Discovery", node.beacon ? "Wi-Fi маяк (UDP 50053)" : "вручную по IP"]);
+  if (node.transport === "usb" && node.version && node.version !== snap.bundledNodeVersion) rows.push([tr("Нода в комплекте", "Bundled node"), snap.bundledNodeVersion]);
+  if (node.transport === "lan") rows.push([tr("Обнаружение", "Discovery"), node.beacon ? "Wi-Fi маяк (UDP 50053)" : "вручную по IP"]);
   if (node.transport === "lan" && node.appVersion) rows.push(["Argus Node", `${node.appVersion}${node.appVc != null ? ` (${node.appVc})` : ""}`]);
   if (node.updateAvailable) rows.push(["Доступна нода", node.updateAvailable]);
   if (node.variant) rows.push(["rpc-server build", node.variant]);
-  if (node.transport !== "local") rows.push(["In running model", node.inEngine ? "да" : "нет"]);
-  if (node.attempts > 0) rows.push(["Failed attempts", String(node.attempts)]);
+  if (node.transport !== "local") rows.push([tr("В запущенной модели", "In running model"), node.inEngine ? "да" : "нет"]);
+  if (node.attempts > 0) rows.push([tr("Неудачных попыток", "Failed attempts"), String(node.attempts)]);
   if (node.speed > 0) rows.push(["Скорость", `${node.speed.toFixed(1)} ГБ/с · ${node.speedMeasured ? "замер" : "оценка"}`]);
   if (node.rttMs != null) rows.push(["RTT", `${node.rttMs.toFixed(1)} мс`]);
   if (node.tempC != null) rows.push(["Температура", `${node.tempC.toFixed(0)} °C${node.throttled ? " · греется, сбавляет скорость" : ""}`]);
   if (node.transport !== "local" && node.assigned) rows.push(["Сейчас", node.assigned === "model" ? "часть модели" : node.assigned === "free" ? "свободна" : node.assigned === "helper" ? "помощник" : "выключена / не в сети"]);
   return (
     <aside className="flex flex-col overflow-y-auto bg-pl-bg1">
-      <div className="panel-head border-t-0"><span>Inspector</span></div>
+      <div className="panel-head border-t-0"><span>{tr("Инспектор", "Inspector")}</span></div>
       <div className="border-b border-pl-line p-4">
-        <div className="label">Selected object</div>
+        <div className="label">{tr("Выбрано", "Selected object")}</div>
         <div className="mt-1 truncate text-sm font-medium text-pl-text" title={node.name}>{node.name}</div>
         <div className="mt-2 flex flex-wrap gap-1.5"><span className={clsx("tag border", c)}>{t}</span><TransportBadge n={node} /></div>
       </div>
@@ -301,7 +312,7 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
           {node.helper && <HelperLine h={node.helper} />}
           <label className="flex cursor-pointer items-center justify-between">
             <span className="text-pl-text">Использовать в кластере</span>
-            <input type="checkbox" className="accent-[#2D72D2]" checked={node.enabled} onChange={(e) => setNodeEnabled(node.id, e.target.checked)} />
+            <input type="checkbox" className="accent-[rgb(var(--pl-blue2))]" checked={node.enabled} onChange={(e) => setNodeEnabled(node.id, e.target.checked)} />
           </label>
           <div>
             <div className="flex justify-between"><span className="text-pl-text">Поправка скорости</span><span className="font-mono text-pl-gold">×{w.toFixed(2)}</span></div>
@@ -314,16 +325,17 @@ function Inspector({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot })
           {node.transport === "usb" && <RebenchButton node={node} />}
           {node.updateAvailable && <NodeUpdateButton node={node} />}
           {node.transport !== "local" && <ReconnectButton node={node} />}
+          {node.transport === "lan" && <DiagButton n={node} />}
           {node.transport !== "local" && <NodeExtraRoles node={node} />}
           {node.transport === "lan" && (
             <button className="btn w-full justify-center border-pl-red/50 text-pl-red" onClick={() => removeLanNode(node.id)}><Trash2 size={12} /> Удалить LAN-ноду</button>
           )}
         </div>
       )}
-      {node.error && <div className="m-4 border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{node.error}</div>}
+      {node.error && <ErrorBox error={node.error} className="m-4" />}
       <div className="mt-auto border-t border-pl-line p-4 font-mono text-2xs leading-5 text-pl-dim">
         {node.transport === "local"
-          ? "llama-server runs here and drives every RPC node."
+          ? tr("Здесь работает llama-server и управляет всеми RPC-нодами.", "llama-server runs here and drives every RPC node.")
           : node.transport === "lan"
             ? "rpc-server в сети: без пароля и шифрования — только закрытая домашняя сеть."
             : node.link === "tether"
@@ -342,14 +354,14 @@ function RolePicker({ node, snap }: { node: ClusterNode; snap: ClusterSnapshot }
       <div className="mb-1 text-pl-text">Роль</div>
       <div className="grid grid-cols-2 gap-px">
         {choices.map((r) => (
-          <button key={r} title={ROLE_HINT[r]} onClick={() => setNodeRole(node.id, r).catch((e) => pushToast("error", String(e)))}
+          <button key={r} title={ROLE_HINT[r]} onClick={() => setNodeRole(node.id, r).catch((e) => toastError(e))}
             className={clsx("border px-2 py-1 text-left text-2xs",
               node.role === r ? (r === "helper" ? "border-pl-violet bg-pl-violet/15 text-pl-text" : "border-pl-blue bg-pl-blue2/25 text-pl-text") : "border-pl-line2 bg-pl-bg2 text-pl-mute hover:bg-pl-bg3")}>
             {ROLE_LABEL[r]}
           </button>
         ))}
       </div>
-      <p className="mt-1.5 text-2xs leading-4 text-pl-dim">{ROLE_HINT[node.role]}.{node.role === "helper" && !snap.rolesEnabled ? " Эксперимент «Роли» выключен — пока работает как «Авто»." : ""}</p>
+      <p className="mt-1.5 text-2xs leading-4 text-pl-dim">{ROLE_HINT[node.role]}.{node.role === "helper" && !snap.rolesEnabled ? ` ${t("roles.offAsAuto")}` : ""}</p>
       {node.role === "auto" && node.assigned === "free" && <p className="mt-1 text-2xs leading-4 text-pl-gold">Сейчас модели хватает остальных устройств — нода свободна.</p>}
     </div>
   );
@@ -389,7 +401,7 @@ function HelperLine({ h, onRetry }: { h: HelperView; onRetry?: () => void }) {
 function RetryHelper({ id, onDone }: { id: string; onDone?: () => void }) {
   const pushToast = useCluster((s) => s.pushToast);
   return (
-    <button className="btn h-6" onClick={async () => { try { await retryHelper(id); onDone?.(); pushToast("info", "Пробую запустить Помощника снова…"); } catch (e) { pushToast("error", String(e)); } }}>
+    <button className="btn h-6" onClick={async () => { try { await retryHelper(id); onDone?.(); pushToast("info", "Пробую запустить Помощника снова…"); } catch (e) { toastError(e); } }}>
       <RotateCw size={11} /> Повторить
     </button>
   );
@@ -402,7 +414,7 @@ function UsbTetherSwitch({ node }: { node: ClusterNode }) {
   const active = node.link === "tether" && node.stage === "connected";
   return (
     <div className="space-y-1.5">
-      <Toggle on={on} set={(v) => setUsbTether(node.id, v).catch((e) => pushToast("error", String(e)))}
+      <Toggle on={on} set={(v) => setUsbTether(node.id, v).catch((e) => toastError(e))}
         label="USB-модем" sub="связь с телефоном через его USB-модем вместо adb-проброса" />
       {on && node.stage === "connected" && (active
         ? <p className="text-2xs leading-4 text-pl-green">Работает через USB-модем · {node.endpoint}</p>
@@ -427,7 +439,7 @@ function RebenchButton({ node }: { node: ClusterNode }) {
       onClick={async () => {
         setBusy(true);
         try { const g = await rebenchNode(node.id); pushToast("ok", `«${node.name}»: ${g.toFixed(1)} ГБ/с — учту при следующем запуске модели`); }
-        catch (e) { pushToast("error", String(e)); }
+        catch (e) { toastError(e); }
         setBusy(false);
       }}>
       {busy ? <><Loader2 size={12} className="animate-spin" /> Тест скорости…</> : <><Gauge size={12} /> Повторить тест скорости</>}
@@ -435,7 +447,7 @@ function RebenchButton({ node }: { node: ClusterNode }) {
   );
 }
 
-/** Settings block «Роли · Эксперимент»: switch, helper model, helper status per node. */
+/** Settings block «Роли»: switch, helper model, helper status per node. */
 function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
   const { pushToast, setView } = useCluster();
   const known = snap.helperModels.some((m) => m.id === snap.helperModel);
@@ -444,22 +456,19 @@ function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
   const ready = snap.helpers.filter((h) => h.ready).length;
   async function pick(model: string) {
     try { await setHelperModel(model); pushToast("info", "Модель Помощника изменена — ноды перезапустят её сами"); }
-    catch (e) { pushToast("error", String(e)); }
+    catch (e) { toastError(e); }
   }
   return (
     <div className="panel">
       <div className="panel-head">
-        <span className="flex shrink-0 items-center gap-1.5"><FlaskConical size={12} className="text-pl-violet" /> Роли · Эксперимент</span>
-        <span className="min-w-0 truncate pl-3 font-mono normal-case tracking-normal text-pl-dim">{snap.rolesEnabled ? `помощников: ${snap.helpers.length} · готово: ${ready}` : "выключено"}</span>
+        <span className="flex shrink-0 items-center gap-1.5"><FlaskConical size={12} className="text-pl-violet" /> {t("roles.title")}</span>
+        <span className="min-w-0 truncate pl-3 font-mono normal-case tracking-normal text-pl-dim">{snap.rolesEnabled ? t("roles.stats").replace("{n}", String(snap.helpers.length)).replace("{r}", String(ready)) : t("roles.off")}</span>
       </div>
       <div className="grid grid-cols-1 gap-px bg-pl-line text-xs lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-3 bg-pl-bg1 p-3">
-          <Toggle on={snap.rolesEnabled} set={(v) => setRolesEnabled(v).catch((e) => pushToast("error", String(e)))}
-            label="Роль «Помощник»" sub="свободная нода запускает свою маленькую модель рядом с основной" />
-          <p className="text-2xs leading-4 text-pl-dim">
-            Помощник придумывает названия чатов, делает «Сводку» переписки и отвечает в «Параллельном тесте» — основная модель при этом не отвлекается.
-            Модель один раз скачивается на ПК и передаётся на ноды по кабелю или по Wi-Fi. Нужна Argus Node 0.3.2.
-          </p>
+          <Toggle on={snap.rolesEnabled} set={(v) => setRolesEnabled(v).catch((e) => toastError(e))}
+            label={t("roles.toggle")} sub={t("roles.toggleSub")} />
+          <p className="text-2xs leading-4 text-pl-dim">{t("roles.desc")}</p>
           {snap.rolesEnabled && (
             <div className="space-y-1.5">
               <div className="text-pl-text">Модель Помощника</div>
@@ -482,7 +491,7 @@ function RolesPanel({ snap }: { snap: ClusterSnapshot }) {
         </div>
         <div className="bg-pl-bg1">
           {!snap.rolesEnabled ? (
-            <div className="p-3 text-2xs leading-5 text-pl-dim">Включите эксперимент, затем выберите ноде роль «Помощник» в таблице или в инспекторе. Остальные роли — «Авто», «Часть модели», «Свободна» — работают всегда.</div>
+            <div className="p-3 text-2xs leading-5 text-pl-dim">{t("roles.offHint")}</div>
           ) : snap.helpers.length === 0 ? (
             <div className="p-3 text-2xs leading-5 text-pl-dim">Пока ни одной ноды с ролью «Помощник». Выберите её в столбце «Роль» — лучше для устройства, которое модели и так не нужно (помечено «Свободна»).</div>
           ) : (
@@ -519,11 +528,41 @@ function NodeUpdateButton({ node }: { node: ClusterNode }) {
         try {
           if (wifi) pushToast("info", await wifiNodeUpdate(node.id));
           else { await updateUsbNode(node.id); pushToast("info", `«${node.name}»: обновление ноды до ${node.updateAvailable}…`); }
-        } catch (e) { pushToast("error", String(e)); }
+        } catch (e) { toastError(e); }
         setBusy(false);
       }}>
       {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {wifi ? "Обновить по Wi-Fi" : `Обновить ноду до ${node.updateAvailable}`}
     </button>
+  );
+}
+
+/** LAN node that the PC can't reach right now → offer «Проверить связь» */
+const needsDiag = (n: ClusterNode) => n.transport === "lan" && (n.stage === "offline" || n.stage === "error");
+
+/** «Проверить связь» for a LAN node (table: small, inspector: full width). */
+function DiagButton({ n, small }: { n: ClusterNode; small?: boolean }) {
+  const setNetDiag = useCluster((s) => s.setNetDiag);
+  const t = useT();
+  const address = n.endpoint ?? n.id.replace(/^lan:/, "");
+  return (
+    <button className={small ? "btn mt-1 h-6 px-1.5 font-sans text-2xs" : "btn w-full justify-center"} title={t("nd.buttonHint")}
+      onClick={(e) => { e.stopPropagation(); setNetDiag({ address, name: n.name }); }}>
+      <Stethoscope size={small ? 11 : 12} /> {t("nd.button")}
+    </button>
+  );
+}
+
+/** «Найдено в сети» row of an already added node: «Проверить связь» (issue #3: heard, but OFFLINE after «Добавить»). */
+function DiagAddressButton({ address, name }: { address: string; name: string }) {
+  const setNetDiag = useCluster((s) => s.setNetDiag);
+  const t = useT();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="text-2xs text-pl-dim">добавлена</span>
+      <button className="btn h-6 px-1.5 font-sans text-2xs" title={t("nd.buttonHint")} onClick={() => setNetDiag({ address, name })}>
+        <Stethoscope size={11} /> {t("nd.button")}
+      </button>
+    </span>
   );
 }
 
@@ -535,7 +574,7 @@ function ReconnectButton({ node }: { node: ClusterNode }) {
       title={node.transport === "usb" ? "Снять проброс порта, перезапустить RpcService на устройстве и подготовить ноду заново" : "Проверить ноду сейчас"}
       onClick={async () => {
         setBusy(true);
-        try { await reconnectNode(node.id); pushToast("info", `«${node.name}»: переподключение…`); } catch (e) { pushToast("error", String(e)); }
+        try { await reconnectNode(node.id); pushToast("info", `«${node.name}»: переподключение…`); } catch (e) { toastError(e); }
         setBusy(false);
       }}>
       {busy ? <Loader2 size={12} className="animate-spin" /> : <Plug size={12} />} Переподключить
@@ -547,18 +586,26 @@ function ReconnectButton({ node }: { node: ClusterNode }) {
 function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
   const pushToast = useCluster((s) => s.pushToast);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pinFor, setPinFor] = useState<DiscoveredNode | null>(null);
   const list = snap.discovered ?? [];
   async function add(d: DiscoveredNode) {
+    if (d.auth) { setPinFor(d); return; }   // secured node: PIN first
     setBusy(d.id);
-    try { await addDiscoveredNode(d.id); pushToast("ok", `Нода «${d.name}» добавлена`); } catch (e) { pushToast("error", String(e)); }
+    try { await addDiscoveredNode(d.id); pushToast("ok", `Нода «${d.name}» добавлена`); }
+    catch (e) { if (isPinRequired(e)) setPinFor(d); else toastError(e); }
     setBusy(null);
   }
+  async function pair(d: DiscoveredNode, pin: string) {
+    await addDiscoveredNode(d.id, pin);
+    pushToast("ok", t("sec.added").replace("{name}", d.name));
+  }
+  const securedNode = (id: string) => snap.nodes.find((n) => n.id === id)?.secure ?? false;
   return (
     <div className="panel">
       <div className="panel-head">
         <span className="flex items-center gap-1.5"><Radar size={12} /> Найдено в сети</span>
         <label className="flex shrink-0 cursor-pointer items-center gap-2 font-mono normal-case tracking-normal text-pl-mute" title="Добавлять найденные ноды без подтверждения">
-          <input type="checkbox" className="accent-[#2D72D2]" checked={snap.autoAddDiscovered} onChange={(e) => setAutoAdd(e.target.checked)} /> автодобавление
+          <input type="checkbox" className="accent-[rgb(var(--pl-blue2))]" checked={snap.autoAddDiscovered} onChange={(e) => setAutoAdd(e.target.checked)} /> автодобавление
         </label>
       </div>
       {snap.beaconError && <div className="border-b border-pl-line bg-pl-red/10 px-3 py-1.5 font-mono text-2xs text-pl-red">{snap.beaconError}</div>}
@@ -576,8 +623,11 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
           </tr></thead>
           <tbody className="whitespace-nowrap font-mono">
             {list.map((d) => (
-              <tr key={d.id} className="border-b border-pl-line last:border-0 odd:bg-pl-bg1 even:bg-[#20252c]">
-                <td className="max-w-[200px] truncate px-3 py-2 font-sans text-pl-text" title={d.name}>{d.name}</td>
+              <tr key={d.id} className="border-b border-pl-line last:border-0 odd:bg-pl-bg1 even:bg-pl-bg2">
+                <td className="max-w-[200px] truncate px-3 py-2 font-sans text-pl-text" title={d.name}>
+                  {d.name}
+                  {d.auth && <span title={t("sec.foundHint")} className="ml-1.5 tag border border-pl-green/50 text-pl-green">{t("sec.found")}</span>}
+                </td>
                 <td className="px-3 py-2 text-pl-mute">{d.endpoint}</td>
                 <td className="px-3 py-2 text-pl-mute">{d.ramMb ? `${gb(d.ramMb)} / ${gb(d.freeMb)} GB` : "—"}</td>
                 <td className="px-3 py-2 text-pl-mute">{d.variant ?? "—"}</td>
@@ -587,7 +637,9 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
                 </td>
                 <td className={clsx("px-3 py-2", d.ageSec > 10 ? "text-pl-orange" : "text-pl-green")}>{d.ageSec > 10 ? `${d.ageSec} с назад` : "● сейчас"}</td>
                 <td className="px-3 py-2 text-right">
-                  {d.added ? <span className="text-2xs text-pl-dim">добавлена</span> : (
+                  {d.added && d.auth && !securedNode(d.id) ? (
+                    <button className="btn h-6" onClick={() => setPinFor(d)}><Plus size={11} /> {t("sec.repair")}</button>
+                  ) : d.added ? (snap.nodes.some((n) => n.id === d.id && needsDiag(n)) ? <DiagAddressButton address={d.endpoint} name={d.name} /> : <span className="text-2xs text-pl-dim">добавлена</span>) : (
                     <button className="btn h-6" disabled={busy === d.id} onClick={() => add(d)}>
                       {busy === d.id ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />} Добавить
                     </button>
@@ -601,8 +653,10 @@ function DiscoveredPanel({ snap }: { snap: ClusterSnapshot }) {
       )}
       <div className="flex items-start gap-2 border-t border-pl-line bg-pl-orange/5 px-3 py-2 text-2xs leading-4 text-pl-orange">
         <ShieldAlert size={12} className="mt-0.5 shrink-0" />
-        <span>У RPC по сети нет пароля и шифрования: любой в этой сети может подключиться к ноде. Только закрытая домашняя сеть — не публичный Wi-Fi, порт 50052 не открывать в интернет. USB быстрее и стабильнее Wi-Fi.</span>
+        <span>У RPC по сети нет пароля и шифрования: любой в этой сети может подключиться к ноде. Только закрытая домашняя сеть — не публичный Wi-Fi, порт 50052 не открывать в интернет. USB быстрее и стабильнее Wi-Fi.
+          {" "}Защищённый режим (PIN) закрывает ноду от чужих устройств в сети, но трафик по-прежнему не шифруется — см. docs/SECURITY.md.</span>
       </div>
+      {pinFor && <PinDialog name={pinFor.name} onSubmit={(pin) => pair(pinFor, pin)} onClose={() => setPinFor(null)} />}
     </div>
   );
 }

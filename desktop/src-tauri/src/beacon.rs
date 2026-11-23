@@ -29,6 +29,8 @@ pub struct Discovered {
     pub throttled: Option<bool>,
     /// node 0.3.3+: `roles` map {helper,voice,library:{state,port,pct,threads,model|zim,error}} (Roles.json() on the phone)
     pub roles: Option<serde_json::Value>,
+    /// secured RPC (beacon `"auth":1`): the port is an auth gateway, adding needs the node's PIN (rpcauth.rs)
+    pub auth: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -59,6 +61,7 @@ struct Beacon {
     #[serde(default)] temp_c: Option<f32>,
     #[serde(default)] throttled: Option<bool>,
     #[serde(default)] roles: Option<serde_json::Value>,
+    #[serde(default)] auth: Option<u8>,
 }
 
 /// {"argus":"node","v":1,"name":"<model>","port":50052,"ram_mb":N,"free_mb":N,"variant":"dotprod","vn":"0.3.1","vc":5}
@@ -76,7 +79,7 @@ pub fn parse_beacon(bytes: &[u8], src: IpAddr) -> Option<Discovered> {
         src_port: 0, vn: b.vn.map(|v| v.chars().filter(|c| !c.is_control()).take(24).collect()), vc: b.vc,
         bench: b.bench.filter(|g| g.is_finite() && *g > 0.0 && *g < 1000.0),
         temp_c: b.temp_c.filter(|t| t.is_finite() && *t > -40.0 && *t < 150.0), throttled: b.throttled,
-        roles: b.roles.filter(|r| r.is_object()),
+        roles: b.roles.filter(|r| r.is_object()), auth: b.auth.unwrap_or(0) == 1,
         helper: b.helper.map(|mut h| { h.error = h.error.map(|e| e.chars().filter(|c| !c.is_control()).take(200).collect()); h }),
     })
 }
@@ -121,5 +124,7 @@ mod tests {
         let d = parse_beacon(br#"{"argus":"node","v":1,"roles":{"voice":{"state":"ready","port":50061,"threads":2},"library":{"state":"idle","port":50063}}}"#, ip).unwrap();
         assert_eq!(d.roles.as_ref().and_then(|r| r["voice"]["state"].as_str()), Some("ready"));
         assert!(parse_beacon(br#"{"argus":"node","v":1,"roles":5}"#, ip).unwrap().roles.is_none());
+        assert!(!parse_beacon(br#"{"argus":"node","v":1}"#, ip).unwrap().auth);
+        assert!(parse_beacon(br#"{"argus":"node","v":1,"auth":1}"#, ip).unwrap().auth);
     }
 }

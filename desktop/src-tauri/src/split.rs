@@ -174,7 +174,7 @@ fn by_speed_desc(devs: &[Dev]) -> impl Fn(&usize, &usize) -> std::cmp::Ordering 
     move |&a, &b| devs[b].speed.partial_cmp(&devs[a].speed).unwrap_or(std::cmp::Ordering::Equal)
 }
 
-/// `role_of(node)` gives the node's role (already resolved against the «Роли» experiment switch).
+/// `role_of(node)` gives the node's role (already resolved against the «Роли» switch).
 #[allow(dead_code)]
 pub fn plan(nodes: &[Node], gpus: &[Node], need_mb: Option<u64>, role_of: &dyn Fn(&Node) -> Role) -> Plan {
     plan_ex(nodes, gpus, need_mb, role_of, &PlanOpts::default())

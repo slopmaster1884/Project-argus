@@ -1,4 +1,4 @@
-// 0.3.2 experiment «Роли»: small jobs for a «Помощник» (chat titles, «Сводка»).
+// «Роли» (0.3.2 experiment, default since 0.4): small jobs for a «Помощник» (chat titles, «Сводка»).
 // Every job has a fallback, so nothing breaks when no helper is ready.
 import { useCluster } from "../store/cluster";
 import { helperCancel, helperChat, onHelperStream, readyHelpers, streamChat, stripThink, type ApiMessage } from "./api";

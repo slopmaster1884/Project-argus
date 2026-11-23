@@ -49,7 +49,11 @@ interface State {
   snapshot: ClusterSnapshot | null;
   wizardOpen: boolean;
   lanDialog: boolean;
+  /** «Проверить связь» modal: address (ip[:port]) prefilled, null = closed */
+  netDiag: { address: string; name?: string } | null;
   tourOpen: boolean;
+  /** first-run wizard (FirstRun.tsx); shown once, reopened from the top bar */
+  firstRunOpen: boolean;
   conversations: Conversation[];
   activeId: string;
   run: ModelRunState;
@@ -59,7 +63,8 @@ interface State {
   engineLog: string[];
   dlBytes: number;
   modelsTab: "curated" | "hf";
-  toasts: { id: string; kind: "info" | "warn" | "error" | "ok"; text: string }[];
+  /** `detail` = raw technical text, shown under «Подробнее» (lib/errors.ts) */
+  toasts: { id: string; kind: "info" | "warn" | "error" | "ok"; text: string; detail?: string; keep?: boolean }[];
   /** self-update (0.3.1) — the app always asks; «Позже» lasts for this session */
   update: UpdateStatus | null;
   updateDialog: boolean;
@@ -73,8 +78,10 @@ interface State {
   setUpdProgress: (p: UpdateProgress | null) => void;
   laterUpdate: (v: string) => void;
   laterNode: (key: string) => void;
-  pushToast: (kind: "info" | "warn" | "error" | "ok", text: string) => void;
+  pushToast: (kind: "info" | "warn" | "error" | "ok", text: string, detail?: string) => void;
   dismissToast: (id: string) => void;
+  /** stop the auto-dismiss (the user opened «Подробнее») */
+  keepToast: (id: string) => void;
   setModelsTab: (t: "curated" | "hf") => void;
   setDl: (b: number) => void;
   pushEngineLog: (l: string) => void;
@@ -86,7 +93,9 @@ interface State {
   setSnapshot: (s: ClusterSnapshot) => void;
   setWizard: (o: boolean) => void;
   setLanDialog: (o: boolean) => void;
+  setNetDiag: (t: { address: string; name?: string } | null) => void;
   setTour: (o: boolean) => void;
+  setFirstRun: (o: boolean) => void;
   setRun: (r: ModelRunState) => void;
   // conversations
   newChat: () => void;
@@ -115,7 +124,11 @@ export const useCluster = create<State>((set, get) => {
     snapshot: null,
     wizardOpen: false,
     lanDialog: false,
-    tourOpen: localStorage.getItem("argus.tourDone") !== "1",
+    netDiag: null,
+    // the tour no longer opens by itself: new users get the first-run wizard, which offers the tour at the end.
+    // Users who already finished the tour (pre-wizard versions) don't see the wizard again.
+    tourOpen: false,
+    firstRunOpen: localStorage.getItem("argus.firstRunDone") !== "1" && localStorage.getItem("argus.tourDone") !== "1",
     conversations: initialConvs,
     activeId: initialActive,
     run: { status: "idle" },
@@ -138,12 +151,13 @@ export const useCluster = create<State>((set, get) => {
     setUpdProgress: (updProgress) => set({ updProgress }),
     laterUpdate: (v) => set((s) => ({ updateLater: [...s.updateLater, v], updateDialog: false })),
     laterNode: (k) => set((s) => ({ nodeLater: [...s.nodeLater, k] })),
-    pushToast: (kind, text) => {
+    pushToast: (kind, text, detail) => {
       const id = uid();
-      set((s) => (s.toasts.some((t) => t.text === text) ? {} : { toasts: [...s.toasts.slice(-4), { id, kind, text }] }));
-      setTimeout(() => get().dismissToast(id), kind === "error" || kind === "warn" ? 9000 : 6000);
+      set((s) => (s.toasts.some((t) => t.text === text) ? {} : { toasts: [...s.toasts.slice(-4), { id, kind, text, detail }] }));
+      setTimeout(() => { if (!get().toasts.find((t) => t.id === id)?.keep) get().dismissToast(id); }, detail ? 14000 : kind === "error" || kind === "warn" ? 9000 : 6000);
     },
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+    keepToast: (id) => set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, keep: true } : t)) })),
     setModelsTab: (modelsTab) => set({ modelsTab }),
     // llama-dl = bytes added to the model cache since *a* start; an engine restart mid-download spawns a second
     // watcher with a later baseline, so two series interleave. Never go backwards within one load.
@@ -163,7 +177,9 @@ export const useCluster = create<State>((set, get) => {
     setSnapshot: (snapshot) => set({ snapshot }),
     setWizard: (wizardOpen) => set({ wizardOpen }),
     setLanDialog: (lanDialog) => set({ lanDialog }),
+    setNetDiag: (netDiag) => set({ netDiag }),
     setTour: (tourOpen) => { if (!tourOpen) localStorage.setItem("argus.tourDone", "1"); set({ tourOpen }); },
+    setFirstRun: (firstRunOpen) => { if (!firstRunOpen) localStorage.setItem("argus.firstRunDone", "1"); set({ firstRunOpen }); },
     // a new load starts its download readout from zero (old values would show a stale 100%)
     setRun: (run) => set((s) => (run.status === "loading" && s.run.status !== "loading" ? { run, dlBytes: 0 } : { run })),
 

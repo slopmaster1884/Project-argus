@@ -1,8 +1,10 @@
 # Free GitHub Actions build: Android rpc-server -> node.apk -> Windows installer + Linux AppImage/.deb with everything bundled.
 # Push this repo to GitHub, open Actions, run "build" — artifacts appear on the run page.
 # Tag push vX.Y.Z (e.g. `git tag v0.3.1 && git push --tags`) additionally publishes a GitHub Release with
-# Argus-Setup.exe, Argus-Node.apk, the Linux AppImage/.deb and SHA256SUMS.txt — the files Argus' updater
-# looks for (it refuses an update without SHA256SUMS.txt). The tag must match the app version.
+# Argus-Setup.exe, Argus-Node.apk, Argus_<v>_amd64.AppImage/.deb, argus-node-linux.sh (+ install.sh when present)
+# and SHA256SUMS.txt — the files Argus' updater looks for (it refuses an update without SHA256SUMS.txt).
+# The tag must match the app version. Desktop jobs still build when the Android chain fails (artifacts without
+# node.apk); the Release itself is only created when ALL jobs succeeded.
 name: build
 on: { workflow_dispatch: {}, push: { tags: ["v*"] } }
 permissions: { contents: write }   # softprops/action-gh-release
@@ -12,24 +14,24 @@ env:
 
 jobs:
   rpc-server-android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build ggml-rpc-server for arm64-v8a
         run: ANDROID_NDK=$ANDROID_NDK_LATEST_HOME ./android/scripts/build-rpc-server.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: librpc_server, path: android/app/src/main/jniLibs/arm64-v8a/librpc_server.so }
 
   node-apk:
     needs: rpc-server-android
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: librpc_server, path: android/app/src/main/jniLibs/arm64-v8a }
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: "17" }
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with: { gradle-version: "8.9" }
       - run: gradle -p android assembleRelease
       # Android only installs an update signed with the SAME key. Put the release keystore (the one that signed the
@@ -41,19 +43,19 @@ jobs:
           APK=android/app/build/outputs/apk/release/app-release.apk
           if [ -n "$KS" ]; then
             echo "$KS" | base64 -d > argus.jks
-            BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
-            $BT/zipalign -f -p 4 $APK aligned.apk
-            $BT/apksigner sign --ks argus.jks --ks-pass "pass:${KS_PASS:-argus123}" --out node.apk aligned.apk
+            BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+            "$BT/zipalign" -f -p 4 "$APK" aligned.apk
+            "$BT/apksigner" sign --ks argus.jks --ks-pass "pass:${KS_PASS:-argus123}" --out node.apk aligned.apk
             rm -f argus.jks
           else
             echo "::warning::ANDROID_KEYSTORE_B64 not set — node.apk is signed with a CI debug key and cannot update existing installs"
-            cp $APK node.apk
+            cp "$APK" node.apk
           fi
           VC=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' android/app/build.gradle.kts)
           VN=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts)
           printf '%s (%s)' "$VN" "$VC" > node.version
           cat node.version
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: node-apk
           path: |
@@ -62,25 +64,29 @@ jobs:
 
   desktop-windows:
     needs: node-apk
+    if: ${{ !cancelled() }}   # build even if the APK chain failed; node.apk is then just not bundled
     runs-on: windows-latest
     defaults: { run: { shell: bash } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "20" }
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: "22" }
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
+        if: needs.node-apk.result == 'success'
         with: { name: node-apk, path: desktop/src-tauri/resources }
+      - if: needs.node-apk.result != 'success'
+        run: echo "::warning::node-apk job ${{ needs.node-apk.result }} — building WITHOUT bundled node.apk (committed resources/node.version kept)"
       - name: Bundle llama-server (CUDA 12.4, RPC enabled) + adb
         run: |
           R=desktop/src-tauri/resources
           base=https://github.com/ggml-org/llama.cpp/releases/download/$LLAMA_REF
-          curl -sSL -o llama.zip  $base/llama-$LLAMA_REF-bin-win-cuda-12.4-x64.zip
-          curl -sSL -o cudart.zip $base/cudart-llama-bin-win-cuda-12.4-x64.zip
+          curl -sSL -o llama.zip  "$base/llama-$LLAMA_REF-bin-win-cuda-12.4-x64.zip"
+          curl -sSL -o cudart.zip "$base/cudart-llama-bin-win-cuda-12.4-x64.zip"
           curl -sSL -o pt.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
-          7z x -y llama.zip -o$R >/dev/null
-          7z x -y cudart.zip -o$R >/dev/null
-          7z x -y pt.zip -opt >/dev/null && cp pt/platform-tools/{adb.exe,AdbWinApi.dll,AdbWinUsbApi.dll} $R/
+          7z x -y llama.zip "-o$R" >/dev/null
+          7z x -y cudart.zip "-o$R" >/dev/null
+          7z x -y pt.zip -opt >/dev/null && cp pt/platform-tools/{adb.exe,AdbWinApi.dll,AdbWinUsbApi.dll} "$R/"
           ls $R
       - run: npm ci
         working-directory: desktop
@@ -93,7 +99,13 @@ jobs:
           V=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
           curl -fsSL -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           W=$(cygpath -w "$PWD")
-          "/c/Program Files (x86)/NSIS/makensis.exe" -V2 -DVERSION=$V \
+          MN="/c/Program Files (x86)/NSIS/makensis.exe"
+          if [ ! -x "$MN" ]; then
+            # windows-2025 runner images no longer ship NSIS
+            choco install nsis -y --no-progress >/dev/null
+            MN="/c/Program Files (x86)/NSIS/makensis.exe"
+          fi
+          "$MN" -V2 "-DVERSION=$V" \
             "-DAPP_EXE=$W\\desktop\\src-tauri\\target\\release\\usb-cluster.exe" \
             "-DRES_DIR=$W\\desktop\\src-tauri\\resources" \
             "-DICON=$W\\desktop\\src-tauri\\icons\\icon.ico" \
@@ -101,35 +113,42 @@ jobs:
             "-DOUT_FILE=$W\\Argus-Setup.exe" \
             desktop/src-tauri/windows-installer.nsi
           ls -l Argus-Setup.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: argus-windows, path: Argus-Setup.exe }
 
   # Linux desktop: AppImage + .deb with llama-server b12008 (Vulkan, x64) and adb bundled.
   # Runtime needs a Vulkan driver (mesa-vulkan-drivers / NVIDIA) and, for USB nodes, Android udev rules
   # (package android-sdk-platform-tools-common) so adb can open the device without root.
+  # Does NOT require node-apk to succeed: if the Android chain fails, the AppImage/.deb are still built, just without
+  # node.apk inside (the app reports «node.apk не найден в resources» only when a node actually needs an install/update).
+  # ubuntu-22.04 on purpose: glibc 2.35 baseline, so the AppImage/.deb run on older distros too.
   desktop-linux:
     needs: node-apk
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     env:
       NO_STRIP: "true"   # linuxdeploy's bundled strip chokes on newer .so files
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "20" }
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: "22" }
       - uses: dtolnay/rust-toolchain@stable
       - name: System libraries (Tauri 2 / webkit2gtk-4.1)
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
-            patchelf libssl-dev build-essential curl wget file unzip
-      - uses: actions/download-artifact@v4
+            libxdo-dev patchelf libssl-dev build-essential curl wget file unzip libfuse2
+      - uses: actions/download-artifact@v8
+        if: needs.node-apk.result == 'success'
         with: { name: node-apk, path: desktop/src-tauri/resources }
+      - if: needs.node-apk.result != 'success'
+        run: echo "::warning::node-apk job ${{ needs.node-apk.result }} — building WITHOUT bundled node.apk (committed resources/node.version kept)"
       - name: Bundle llama-server (Vulkan, RPC) + adb
         run: |
           set -e
           R=desktop/src-tauri/resources
           base=https://github.com/ggml-org/llama.cpp/releases/download/$LLAMA_REF
-          curl -fsSL -o llama.tgz $base/llama-$LLAMA_REF-bin-ubuntu-vulkan-x64.tar.gz
+          curl -fsSL -o llama.tgz "$base/llama-$LLAMA_REF-bin-ubuntu-vulkan-x64.tar.gz"
           mkdir -p llama && tar -xzf llama.tgz -C llama --strip-components=1
           cp llama/llama-server $R/
           # shared libs by SONAME (RUNPATH=$ORIGIN); skip unversioned symlinks and other tools' *-impl.so
@@ -147,21 +166,39 @@ jobs:
         working-directory: desktop
       - run: npx tauri build --bundles appimage,deb
         working-directory: desktop
-      - uses: actions/upload-artifact@v4
+      # Tauri names them after productName ("Argus Cluster_<v>_amd64.*"); ship stable, space-free names.
+      # The updater picks any *.AppImage containing x86_64/amd64, so Argus_<v>_amd64.AppImage matches.
+      - name: Rename -> Argus_<version>_amd64.AppImage / .deb
+        run: |
+          set -euo pipefail
+          V=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
+          B=desktop/src-tauri/target/release/bundle
+          mkdir -p dist-linux
+          shopt -s nullglob
+          imgs=("$B"/appimage/*.AppImage); debs=("$B"/deb/*.deb)
+          [ ${#imgs[@]} -eq 1 ] || { echo "::error::expected 1 AppImage, got ${#imgs[@]}: ${imgs[*]}"; exit 1; }
+          [ ${#debs[@]} -eq 1 ] || { echo "::error::expected 1 .deb, got ${#debs[@]}: ${debs[*]}"; exit 1; }
+          cp "${imgs[0]}" "dist-linux/Argus_${V}_amd64.AppImage"
+          cp "${debs[0]}" "dist-linux/Argus_${V}_amd64.deb"
+          chmod +x "dist-linux/Argus_${V}_amd64.AppImage"
+          ls -l dist-linux
+      - uses: actions/upload-artifact@v7
         with:
           name: argus-linux
+          if-no-files-found: error
           path: |
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            desktop/src-tauri/target/release/bundle/deb/*.deb
+            dist-linux/*.AppImage
+            dist-linux/*.deb
 
   # Tag push vX.Y.Z -> GitHub Release with every asset + SHA256SUMS.txt (Argus' updater requires the checksums).
+  # No status function in `if` ⇒ implicit success(): any failed/skipped need (incl. node-apk) blocks the Release.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [node-apk, desktop-windows, desktop-linux]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { path: artifacts }
       - name: Collect assets + SHA256SUMS.txt
         run: |
@@ -171,10 +208,12 @@ jobs:
           mkdir -p dist
           cp artifacts/argus-windows/Argus-Setup.exe dist/
           cp artifacts/node-apk/node.apk dist/Argus-Node.apk
-          find artifacts/argus-linux -name '*.AppImage' -exec cp {} dist/ \;
-          find artifacts/argus-linux -name '*.deb' -exec cp {} dist/ \;
+          cp "artifacts/argus-linux/Argus_${V}_amd64.AppImage" "artifacts/argus-linux/Argus_${V}_amd64.deb" dist/
+          # plain helper scripts for Linux users (install.sh comes from the installers branch; optional until merged)
+          cp scripts/argus-node-linux.sh dist/
+          if [ -f scripts/install.sh ]; then cp scripts/install.sh dist/; else echo "::notice::scripts/install.sh not in this ref — not attached"; fi
           bash scripts/make-release-assets.sh dist
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: Argus ${{ github.ref_name }}
@@ -184,4 +223,7 @@ jobs:
             dist/Argus-Node.apk
             dist/*.AppImage
             dist/*.deb
+            dist/argus-node-linux.sh
+            dist/install.sh
             dist/SHA256SUMS.txt
+          fail_on_unmatched_files: false

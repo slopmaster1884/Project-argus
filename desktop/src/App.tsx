@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { onClusterUpdate, onLlamaLog, onDownload, onEngineState, onToast, onUpdateAvailable, onUpdateProgress, platformInfo, setKeepLoaded, updateStatus } from "./lib/api";
 import { AboutDialog, NodeUpdateDialog, UpdateDialog, useNodeToAsk } from "./components/Updates";
 import type { UpdateStatus } from "./lib/types";
@@ -16,14 +16,23 @@ import KnowledgeView from "./components/KnowledgeView";
 import UsbWizard from "./components/UsbWizard";
 import StatusBar from "./components/StatusBar";
 import LanDialog from "./components/LanDialog";
+import NetDiag from "./components/NetDiag";
 import Tour from "./components/Tour";
+import FirstRun from "./components/FirstRun";
 import Toaster from "./components/Toaster";
+import Splash from "./components/fx/Splash";
+import Fx from "./components/fx/Fx";
+import AppearanceDialog from "./components/fx/AppearanceDialog";
+import { useAppearanceUi } from "./lib/theme";
 import { reattach, applyEngine } from "./lib/launch";
 import { setPlatform } from "./lib/agent";
 
 export default function App() {
-  const { view, setSnapshot, wizardOpen, lanDialog, tourOpen, setRun, updateDialog, aboutOpen } = useCluster();
+  const { view, setSnapshot, wizardOpen, lanDialog, netDiag, tourOpen, firstRunOpen, setRun, updateDialog, aboutOpen } = useCluster();
   const nodeAsk = useNodeToAsk();
+  const ui = useAppearanceUi();
+  const [splashDone, setSplashDone] = useState(0);
+  const endSplash = useCallback(() => setSplashDone(useAppearanceUi.getState().splash), []);
 
   // self-update: ASK (never install by itself). «Позже» = not again this session, «Пропустить» = never for that version.
   useEffect(() => {
@@ -76,6 +85,7 @@ export default function App() {
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden text-pl-text">
+      <div className="argus-backdrop" aria-hidden />
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <NavRail />
@@ -91,12 +101,17 @@ export default function App() {
         </main>
       </div>
       <StatusBar />
+      {firstRunOpen && <FirstRun />}
       {wizardOpen && <UsbWizard />}
       {lanDialog && <LanDialog />}
+      {netDiag && <NetDiag key={netDiag.address} />}
       {tourOpen && <Tour />}
       {aboutOpen && <AboutDialog />}
-      {updateDialog ? <UpdateDialog /> : nodeAsk && !wizardOpen && !tourOpen && <NodeUpdateDialog key={nodeAsk[0].id} node={nodeAsk[0]} version={nodeAsk[1]} />}
+      {updateDialog ? <UpdateDialog /> : nodeAsk && !wizardOpen && !tourOpen && !firstRunOpen && <NodeUpdateDialog key={nodeAsk[0].id} node={nodeAsk[0]} version={nodeAsk[1]} />}
       <Toaster />
+      <Fx />
+      {ui.open && <AppearanceDialog onClose={() => ui.setOpen(false)} onSplash={ui.replaySplash} />}
+      {splashDone !== ui.splash && <Splash key={ui.splash} preview={ui.splash > 1} onDone={endSplash} />}
     </div>
   );
 }

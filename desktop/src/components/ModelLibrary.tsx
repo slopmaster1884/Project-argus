@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import { ChevronDown, ChevronUp, Copy, Cpu, ExternalLink, Loader2, MonitorSmartphone, PanelRight, Play, Search, Smartphone, Split, Square, Star, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
@@ -14,11 +15,13 @@ import Drawer from "./Drawer";
 import { useSteady, useWide } from "../lib/ui";
 import HfBrowser from "./HfBrowser";
 import { Toggle } from "./ChatView";
+import { toastError } from "../lib/errors";
+import ErrorBox from "./ErrorBox";
 
 export const fitTag = {
-  fits: ["FITS", "border-pl-green/50 text-pl-green", "green"],
-  tight: ["TIGHT", "border-pl-orange/50 text-pl-orange", "orange"],
-  "too-heavy": ["EXCEEDS POOL", "border-pl-red/50 text-pl-red", "red"],
+  fits: [tr("ВЛЕЗАЕТ", "FITS"), "border-pl-green/50 text-pl-green", "green"],
+  tight: [tr("ВПРИТЫК", "TIGHT"), "border-pl-orange/50 text-pl-orange", "orange"],
+  "too-heavy": [tr("НЕ ВЛЕЗАЕТ", "EXCEEDS POOL"), "border-pl-red/50 text-pl-red", "red"],
 } as const;
 
 export const hfUrl = (repo: string) => `https://huggingface.co/${repo.split(":")[0]}`;
@@ -61,10 +64,10 @@ export default function ModelLibrary() {
   return (
     <div className="flex h-full min-w-0 flex-col bg-pl-bg0 p-3">
       <div className="mb-3 grid grid-cols-4 gap-2 xl:gap-3">
-        <Kpi k="Allocatable pool" v={`${gb(usable)} GB`} hint={snapshot && usable < snapshot.usableMb ? `без нод «Свободна» и «Помощник»: −${gb(snapshot.usableMb - usable)} GB` : undefined} />
-        <Kpi k="Models that fit" v={`${fitting} / ${MODELS.length}`} tone="text-pl-green" />
+        <Kpi k={tr("Доступный пул", "Allocatable pool")} v={`${gb(usable)} GB`} hint={snapshot && usable < snapshot.usableMb ? `без нод «Свободна» и «Помощник»: −${gb(snapshot.usableMb - usable)} GB` : undefined} />
+        <Kpi k={tr("Подходят моделей", "Models that fit")} v={`${fitting} / ${MODELS.length}`} tone="text-pl-green" />
         <div className="panel min-w-0 px-3 py-2 xl:px-4 xl:py-3">
-          <div className="label truncate">Context window</div>
+          <div className="label truncate">{tr("Контекст", "Context window")}</div>
           <div className="mt-1.5 flex gap-px">
             {CTX_PRESETS.map((p) => (
               <button key={p.ctx} onClick={() => setCtx(p.ctx)} title={p.hint}
@@ -75,7 +78,7 @@ export default function ModelLibrary() {
             ))}
           </div>
         </div>
-        <Kpi k="Engine" v={run.status === "idle" ? "idle" : run.status === "error" ? "error" : run.status} tone={run.status === "ready" ? "text-pl-green" : undefined} />
+        <Kpi k={tr("Движок", "Engine")} v={run.status === "idle" ? "idle" : run.status === "error" ? "error" : run.status} tone={run.status === "ready" ? "text-pl-green" : undefined} />
       </div>
       <div className="relative grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="panel flex min-h-0 min-w-0 flex-col">
@@ -94,7 +97,7 @@ export default function ModelLibrary() {
               <table className="w-full min-w-[820px] text-xs">
                 <thead className="sticky top-0 z-10 bg-pl-bg1">
                   <tr className="border-b border-pl-line text-left">
-                    {["Model", "Params", "Quant", "File", "Required", "Pool usage", "Fit", ""].map((h) =>
+                    {[tr("Модель", "Model"), tr("Парам.", "Params"), tr("Квант", "Quant"), tr("Файл", "File"), tr("Нужно", "Required"), tr("Занятость пула", "Pool usage"), tr("Влезает", "Fit"), ""].map((h) =>
                       <th key={h} className="label whitespace-nowrap px-3 py-1.5">{h}</th>)}
                   </tr>
                 </thead>
@@ -108,7 +111,7 @@ export default function ModelLibrary() {
                     const isBest = best?.id === b.id;
                     return (
                       <tr key={m.id} onClick={() => { setPreviewId(b.id); if (!wide && tab === "curated") setSide(true); }} title="Показать план распределения справа"
-                        className={clsx("cursor-pointer border-b border-pl-line", preview && baseOf(preview).id === b.id && !active && "outline outline-1 -outline-offset-1 outline-pl-blue/60", active ? "bg-pl-blue2/20" : isBest ? "bg-pl-gold/[0.07]" : "odd:bg-pl-bg1 even:bg-[#20252c] hover:bg-pl-bg3",
+                        className={clsx("cursor-pointer border-b border-pl-line", preview && baseOf(preview).id === b.id && !active && "outline outline-1 -outline-offset-1 outline-pl-blue/60", active ? "bg-pl-blue2/20" : isBest ? "bg-pl-gold/[0.07]" : "odd:bg-pl-bg1 even:bg-pl-bg2 hover:bg-pl-bg3",
                         fit === "too-heavy" && "text-pl-dim", isBest && "shadow-[inset_2px_0_0_#FBD065]")}>
                         <td className="px-3 py-2 font-sans text-pl-text">
                           <div className="flex flex-wrap items-center gap-1.5">{isBest && <Star size={11} className="shrink-0 fill-pl-gold text-pl-gold" />}<span className="whitespace-nowrap">{m.name}</span>
@@ -134,7 +137,7 @@ export default function ModelLibrary() {
                             </button>
                           ) : (
                             <button className="btn-primary" disabled={fit === "too-heavy" || run.status === "loading"} onClick={(e) => { e.stopPropagation(); deploy(m); }} data-tour={isBest ? "deploy" : undefined}>
-                              <Play size={11} /> Deploy
+                              <Play size={11} /> {tr("Запустить", "Deploy")}
                             </button>
                           )}
                         </td>
@@ -145,7 +148,7 @@ export default function ModelLibrary() {
               </table>
             </div>
           )}
-          {run.status === "error" && <div className="m-3 border-l-2 border-pl-red bg-pl-red/10 p-2 font-mono text-2xs text-pl-red">{run.message}</div>}
+          {run.status === "error" && <ErrorBox error={run.message} className="m-3" />}
           {run.status === "broken" && <EngineBanner />}
         </div>
         <Drawer wide={wide} open={side} onClose={() => setSide(false)} title="План запуска" width={320}>
@@ -188,7 +191,7 @@ function SplitPreview({ model, onVariant }: { model: ModelEntry; onVariant: (m: 
       <div className="panel-head"><span className="flex shrink-0 items-center gap-1.5"><Split size={11} className="text-pl-blue" /> План запуска</span>
         <span className="min-w-0 truncate pl-2 normal-case tracking-normal text-pl-dim" title={model.name}>{model.name}</span></div>
       <div className="space-y-2.5 p-3 text-xs">
-        {err ? <div className="text-2xs text-pl-red">{err}</div> : !plan ? <div className="flex items-center gap-1.5 text-2xs text-pl-dim"><Loader2 size={11} className="animate-spin" /> считаю…</div> : (
+        {err ? <ErrorBox error={err} /> : !plan ? <div className="flex items-center gap-1.5 text-2xs text-pl-dim"><Loader2 size={11} className="animate-spin" /> считаю…</div> : (
           <>
             <div className="flex items-baseline justify-between">
               <span className="text-pl-dim">нужно {gb(need)} ГБ</span>
@@ -276,7 +279,7 @@ function SpeedPanel() {
   }, [target?.id, target?.hfRepo, target?.hfFile, draftOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleDraft = (v: boolean) => {
     setPending(v);
-    setDraftEnabled(v).catch((e) => { setPending(null); pushToast("error", String(e)); });
+    setDraftEnabled(v).catch((e) => { setPending(null); toastError(e); });
   };
   const sizeGb = ds ? ds.sizeMb / 1024 : 0;
   const draftSub = ds?.name
@@ -340,7 +343,7 @@ function EngineLog() {
         </button>
         <button className="flex shrink-0 items-center gap-1 normal-case tracking-normal text-pl-dim hover:text-pl-text"
           onClick={() => { navigator.clipboard.writeText(log.join("\n")); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
-          <Copy size={12} /> {copied ? "Copied" : "Copy"}
+          <Copy size={12} /> {copied ? tr("Скопировано", "Copied") : tr("Копировать", "Copy")}
         </button>
       </div>
       {loading && dl > 0 && <DownloadBar name={run.model.name} sizeGb={run.model.sizeGb} bytes={dl} />}

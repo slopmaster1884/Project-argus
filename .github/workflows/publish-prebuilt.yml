@@ -1,23 +1,69 @@
 # Publishes prebuilt, verified binaries from branch `release-bin` as a DRAFT GitHub Release.
 # The draft becomes public only when the maintainer presses Publish.
+#
+# Assets: bin/Argus-Setup.exe + bin/Argus-Node.apk (release-bin), the Linux AppImage/.deb, the plain scripts
+# argus-node-linux.sh and install.sh (from `scripts_ref`), and SHA256SUMS.txt over all of them.
+# Linux builds come from bin/Argus_*_amd64.{AppImage,deb} on release-bin if committed there; otherwise give
+# `build_run_id` = the run id of a successful "build" workflow run (Actions → build → URL .../runs/<id>) and the
+# `argus-linux` artifact of that run is downloaded. Set `require_linux` to false to publish without Linux builds.
 name: publish-prebuilt
 on:
   workflow_dispatch:
     inputs:
       tag: { description: "Release tag, e.g. v0.3.1", required: true }
-permissions: { contents: write }
+      build_run_id: { description: "Run id of a 'build' workflow run to take the argus-linux artifact from (optional)", required: false, default: "" }
+      scripts_ref: { description: "Ref to take scripts/argus-node-linux.sh and scripts/install.sh from", required: false, default: "main" }
+      require_linux: { description: "Fail if no Linux AppImage/.deb is found", type: boolean, required: false, default: true }
+permissions:
+  contents: write   # gh release create
+  actions: read     # download-artifact from another run (build_run_id)
 jobs:
   draft:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: release-bin }
-      - name: Checksums
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.scripts_ref }}", path: src }
+      - uses: actions/download-artifact@v8
+        if: inputs.build_run_id != ''
+        with:
+          name: argus-linux
+          path: linux
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - name: Collect assets + SHA256SUMS.txt
+        env: { REQUIRE_LINUX: "${{ inputs.require_linux }}", SCRIPTS_REF: "${{ inputs.scripts_ref }}", TAG: "${{ inputs.tag }}" }
         run: |
-          cd bin && sha256sum Argus-Setup.exe Argus-Node.apk > SHA256SUMS.txt && cat SHA256SUMS.txt
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p dist
+          cp bin/Argus-Setup.exe bin/Argus-Node.apk dist/
+          # Linux builds: committed on release-bin, or the artifact of build_run_id
+          for f in bin/Argus_*_amd64.AppImage bin/Argus_*_amd64.deb linux/*.AppImage linux/*.deb; do cp "$f" dist/; done
+          linux=(dist/*.AppImage dist/*.deb)
+          if [ ${#linux[@]} -eq 0 ]; then
+            if [ "$REQUIRE_LINUX" = "true" ]; then
+              echo "::error::no Linux AppImage/.deb: commit bin/Argus_<v>_amd64.{AppImage,deb} to release-bin or pass build_run_id"; exit 1
+            fi
+            echo "::warning::publishing WITHOUT Linux builds"
+          fi
+          # the updater takes the first *.AppImage it finds — never ship one for another version
+          for f in "${linux[@]}"; do
+            case "$(basename "$f")" in "Argus_${TAG#v}_amd64."*) ;; *) echo "::error::$f does not match tag $TAG (want Argus_${TAG#v}_amd64.*)"; exit 1 ;; esac
+          done
+          chmod +x dist/*.AppImage 2>/dev/null || true
+          cp src/scripts/argus-node-linux.sh dist/
+          # install.sh lands via the installers branch; attach it only once it exists on scripts_ref
+          if [ -f src/scripts/install.sh ]; then cp src/scripts/install.sh dist/
+          else echo "::notice::src/scripts/install.sh not on $SCRIPTS_REF — not attached"; fi
+          bash src/scripts/make-release-assets.sh dist
       - name: Create draft release
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env: { GH_TOKEN: "${{ github.token }}", TAG: "${{ inputs.tag }}" }
         run: |
-          gh release create "${{ inputs.tag }}" bin/Argus-Setup.exe bin/Argus-Node.apk bin/SHA256SUMS.txt \
+          set -euo pipefail
+          cd dist
+          mapfile -t files < <(awk '{print $2}' SHA256SUMS.txt)
+          gh release create "$TAG" "${files[@]}" SHA256SUMS.txt \
             --repo "${{ github.repository }}" --draft --target main \
-            --title "Argus ${{ inputs.tag }}" --notes-file bin/NOTES.md
+            --title "Argus $TAG" --notes-file ../bin/NOTES.md

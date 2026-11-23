@@ -2,11 +2,16 @@ import { useState } from "react";
 import { Flame, Loader2, RotateCw, TriangleAlert, Zap } from "lucide-react";
 import { useCluster } from "../store/cluster";
 import { restartEngine } from "../lib/api";
+import { humanizeError } from "../lib/errors";
+import { useT } from "../lib/i18n";
+import { Details } from "./ErrorBox";
+import { toastError } from "../lib/errors";
 
 /** Engine problems + the "Перезапустить движок" button. Shown in Chat and Devices. */
 export default function EngineBanner({ compact }: { compact?: boolean }) {
   const { snapshot, run, pushToast } = useCluster();
   const [busy, setBusy] = useState(false);
+  const t = useT();
   const e = snapshot?.engine;
   if (!e) return null;
   const broken = e.status === "broken" || run.status === "broken";
@@ -27,7 +32,7 @@ export default function EngineBanner({ compact }: { compact?: boolean }) {
   async function restart() {
     setBusy(true);
     try { await restartEngine(); pushToast("info", "Движок перезапускается с текущим набором нод…"); }
-    catch (err) { pushToast("error", String(err)); }
+    catch (err) { toastError(err); }
     setBusy(false);
   }
   const reason = e.reason ?? (run.status === "broken" ? run.reason : "");
@@ -38,7 +43,7 @@ export default function EngineBanner({ compact }: { compact?: boolean }) {
         {broken ? (
           <>
             <div className="font-semibold text-pl-orange">Движок остановлен</div>
-            <div className="text-pl-text">{reason}</div>
+            <Reason reason={reason} t={t} />
             {e.pendingRestart && <div className="mt-0.5 flex items-center gap-1.5 font-mono text-2xs text-pl-mute"><Loader2 size={10} className="animate-spin" /> автоперезапуск, когда кластер стабилизируется (3 с без изменений)</div>}
           </>
         ) : (
@@ -51,5 +56,18 @@ export default function EngineBanner({ compact }: { compact?: boolean }) {
         </button>
       )}
     </div>
+  );
+}
+
+/** «Движок не запустился: cudaMalloc failed: out of memory» → «Не хватает памяти» + what to do, raw under «Подробнее». */
+function Reason({ reason, t }: { reason: string; t: ReturnType<typeof useT> }) {
+  const h = humanizeError(reason, t);
+  // node-disconnect reasons etc. are already plain Russian: show them as they are
+  if (!h.kind || h.kind === "engine") return <><div className="text-pl-text">{reason}</div>{h.kind && <div className="text-pl-mute">{h.hint}</div>}</>;
+  return (
+    <>
+      <div className="text-pl-text">{h.title}. {h.hint}</div>
+      <Details raw={h.raw} className="mt-0.5" />
+    </>
   );
 }

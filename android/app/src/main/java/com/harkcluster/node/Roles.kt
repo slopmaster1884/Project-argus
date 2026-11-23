@@ -24,6 +24,8 @@ import java.net.URL
  *   helper  — llama-server :50062 (Helper.kt)
  *   voice   — whisper-server :50061 (Voice below), model downloaded from the PC (:50055/helper/<file>)
  *   library — kiwix-serve :50063 (Library below), .zim picked on the phone (SAF) into filesDir/zim
+ *   search  — 0.4 «Поиск»: llama-server --embedding :50060 (Embeddings below), model from the PC like voice;
+ *             reported as "embeddings" in the roles map (desktop nodesvc.rs / roles_extra.rs)
  * Every assignment is persisted in prefs "node"/"role_<name>" and relaunched when the service is recreated;
  * every stop (role_stop, role=idle, legacy helper_stop, beacon `"<role>":false`) also forgets it.
  */
@@ -44,7 +46,8 @@ object Roles {
                 "helper" -> startHelper(app, intent, wifi, explicit = true)
                 "voice" -> startVoice(app, intent, wifi)
                 "library" -> startLibrary(app, intent.getStringExtra("zim"), wifi)
-                else -> RpcService.addLog("roles: unknown role '$r' (rpc|helper|voice|library|idle)")
+                "search", "embeddings" -> startSearch(app, intent, wifi)
+                else -> RpcService.addLog("roles: unknown role '$r' (rpc|helper|voice|library|search|idle)")
             }
             // legacy 0.3.2 form: helper_model + helper_url without --es role
             if ("helper" !in roles && !intent.hasExtra("role_stop") && intent.hasExtra("helper_model")) startHelper(app, intent, wifi, explicit = false)
@@ -52,8 +55,8 @@ object Roles {
             if ("library" !in roles && intent.hasExtra("zim")) startLibrary(app, intent.getStringExtra("zim"), wifi)
         }
         // address follows the mode; persisted roles come back after a service restart
-        Helper.onModeChanged(app, wifi); Voice.onModeChanged(app, wifi); Library.onModeChanged(app, wifi)
-        Helper.restore(app, wifi); Voice.restore(app, wifi); Library.restore(app, wifi)
+        Helper.onModeChanged(app, wifi); Voice.onModeChanged(app, wifi); Library.onModeChanged(app, wifi); Embeddings.onModeChanged(app, wifi)
+        Helper.restore(app, wifi); Voice.restore(app, wifi); Library.restore(app, wifi); Embeddings.restore(app, wifi)
     }
 
     private fun stopList(ctx: Context, list: String, why: String) {
@@ -62,6 +65,7 @@ object Roles {
         if (all || "helper" in names) Helper.stop(why, forget = true, ctx = ctx)
         if (all || "voice" in names) Voice.stop(why, forget = true, ctx = ctx)
         if (all || "library" in names) Library.stop(why, forget = true, ctx = ctx)
+        if (all || "search" in names || "embeddings" in names) Embeddings.stop(why, forget = true, ctx = ctx)
     }
 
     private fun intOrLong(i: Intent, k: String): Long = i.getLongExtra(k, i.getIntExtra(k, 0).toLong())
@@ -79,6 +83,13 @@ object Roles {
         val url = i.getStringExtra("voice_url")?.trim().orEmpty()
         if (file.isNotEmpty() && url.isNotEmpty()) Voice.start(ctx, file, url, intOrLong(i, "voice_size"), wifi, i.getIntExtra("voice_threads", 0))
         else { if (!Voice.active) Voice.restore(ctx, wifi); if (!Voice.active) RpcService.addLog("roles: role=voice needs --es voice_model and --es voice_url") }
+    }
+
+    private fun startSearch(ctx: Context, i: Intent, wifi: Boolean) {
+        val file = i.getStringExtra("search_model")?.trim().orEmpty()
+        val url = i.getStringExtra("search_url")?.trim().orEmpty()
+        if (file.isNotEmpty() && url.isNotEmpty()) Embeddings.start(ctx, file, url, intOrLong(i, "search_size"), wifi, i.getIntExtra("search_threads", 0))
+        else { if (!Embeddings.active) Embeddings.restore(ctx, wifi); if (!Embeddings.active) RpcService.addLog("roles: role=search needs --es search_model and --es search_url") }
     }
 
     private fun startLibrary(ctx: Context, zim: String?, wifi: Boolean) {
@@ -102,13 +113,21 @@ object Roles {
             is Boolean -> if (!l) Library.stop("PC (Wi-Fi): role removed", forget = true, ctx = ctx)
             is JSONObject -> startLibrary(ctx, l.optString("zim").takeIf { it.isNotEmpty() }, true)
         }
+        when (val e = if (msg.has("search") && !msg.isNull("search")) msg.opt("search") else null) {
+            is Boolean -> if (!e) Embeddings.stop("PC (Wi-Fi): role removed", forget = true, ctx = ctx)
+            is JSONObject -> e.optString("file").takeIf { it.isNotEmpty() }?.let { f ->
+                Embeddings.start(ctx, f, "http://$pcIp:$port${e.optString("path", "/helper/$f")}", e.optLong("size", 0L), true, e.optInt("threads", 0))
+            }
+        }
     }
 
-    /** roles map for the beacon / `argus-status`: {helper,voice,library:{state,port,model|zim,...}} */
+    /** roles map for the beacon / `argus-status`: {helper,voice,library,embeddings:{state,port,model|zim,...}}.
+     *  The "embeddings" key itself tells the PC that this node can do «Поиск» (0.4). */
     fun json(): JSONObject = JSONObject()
         .put("helper", Helper.beaconJson())
         .put("voice", Voice.json())
         .put("library", Library.json())
+        .put("embeddings", Embeddings.json())
 }
 
 /** Persisted role assignments: prefs "node", key role_<name> = JSON. */
@@ -267,12 +286,19 @@ abstract class SideServer(val name: String, val port: Int, private val lib: Stri
     }
     protected abstract fun resetTarget()
 
+    /** health check: GET [healthPath] on 127.0.0.1; [healthy] decides by the HTTP code (any answer by default) */
+    protected open val healthPath = "/"
+    protected open fun healthy(code: Int) = code > 0
+
+    /** a leftover process of THIS role (Embeddings shares libllama_server.so with Helper: told apart by its args) */
+    protected open fun isMine(cmdline: String) = cmdline.contains(lib)
+
     private fun killOrphans() {
         val me = android.os.Process.myPid(); val own = proc
         File("/proc").listFiles { f -> f.name.all(Char::isDigit) }?.forEach { d ->
             val pid = d.name.toInt(); if (pid == me) return@forEach
             val cmd = runCatching { File(d, "cmdline").readText() }.getOrNull() ?: return@forEach
-            if (cmd.contains(lib) && (own == null || !own.isAlive)) { android.os.Process.killProcess(pid); log("killed stale pid $pid") }
+            if (isMine(cmd) && (own == null || !own.isAlive)) { android.os.Process.killProcess(pid); log("killed stale pid $pid") }
         }
     }
 
@@ -326,9 +352,9 @@ abstract class SideServer(val name: String, val port: Int, private val lib: Stri
             while (p.isAlive && g == gen && state != "ready") {
                 Thread.sleep(1500)
                 val ok = runCatching {
-                    val c = URL("http://127.0.0.1:$port/").openConnection() as HttpURLConnection
+                    val c = URL("http://127.0.0.1:$port$healthPath").openConnection() as HttpURLConnection
                     c.connectTimeout = 1500; c.readTimeout = 3000
-                    try { c.responseCode > 0 } finally { c.disconnect() }
+                    try { healthy(c.responseCode) } finally { c.disconnect() }
                 }.getOrDefault(false)
                 if (ok && g == gen && state != "ready") { state = "ready"; error = null; log("ready on $host:$port") }
             }
@@ -506,6 +532,77 @@ object Library : SideServer("library", 50063, "libkiwix_serve.so", "role_library
         } catch (e: Exception) {
             part.delete(); importPct = -1; importMsg = "Ошибка: ${e.message}"; throw e
         }
+    }
+}
+
+/**
+ * 0.4 «Поиск»: the same libllama_server.so as Helper, in embedding mode on :50060:
+ *   `-m <nomic-embed-text-v1.5.Q8_0.gguf> --embedding --pooling mean --host 127.0.0.1|0.0.0.0 --port 50060 -c 2048 -b 2048 -ub 2048 -t N`
+ * Model downloaded from the PC (search_url, usually http://127.0.0.1:50055/helper/<file>) into filesDir/embed.
+ * The PC (rag.rs) uses POST /v1/embeddings; it falls back to its own embedding server when this one is gone.
+ */
+object Embeddings : SideServer("search", 50060, "libllama_server.so", "role_search") {
+    const val PORT = 50060
+    @Volatile var model: String? = null; private set
+    private var url: String? = null
+    private var size = 0L
+
+    override fun hostArg(wifi: Boolean) = if (wifi) "0.0.0.0" else "127.0.0.1"
+    override fun resetTarget() { model = null }
+    /** llama-server answers 503 on /health while the model loads */
+    override val healthPath = "/health"
+    override fun healthy(code: Int) = code == 200
+    /** only our embedding server; Helper's llama-server (no --embedding) is left alone */
+    override fun isMine(cmdline: String) = cmdline.contains("libllama_server.so") && cmdline.contains("--embedding") && cmdline.contains(PORT.toString())
+
+    fun start(ctx: Context, file: String, srcUrl: String, expectSize: Long, wifi: Boolean, wantThreads: Int) = synchronized(lock) {
+        if (!Voice.safeFile(file) || !file.lowercase().endsWith(".gguf")) { model = file; fail("недопустимое имя файла модели"); return@synchronized }
+        val t = if (wantThreads > 0) wantThreads else Cpu.defaultSideThreads()
+        RolePrefs.save(ctx, pref, JSONObject().put("model", file).put("url", srcUrl).put("size", expectSize).put("threads", wantThreads))
+        if (model == file && state != "error" && state != "idle" && host == hostArg(wifi) && t == threads) { url = srcUrl; return@synchronized }
+        stopLocked()
+        model = file; url = srcUrl; size = expectSize; threads = t
+        log("assignment: $file from $srcUrl, -t $t")
+        launch(ctx, wifi)
+    }
+
+    fun restore(ctx: Context, wifi: Boolean) {
+        if (active) return
+        val j = RolePrefs.load(ctx, pref) ?: return
+        val m = j.optString("model").takeIf { it.isNotEmpty() } ?: return
+        log("restore persisted assignment $m")
+        start(ctx, m, j.optString("url"), j.optLong("size", 0L), wifi, j.optInt("threads", 0))
+    }
+
+    fun onModeChanged(ctx: Context, wifi: Boolean) {
+        val m = model; val u = url
+        if (active && m != null && u != null && host != hostArg(wifi)) {
+            synchronized(lock) { stopLocked() }
+            start(ctx, m, u, size, wifi, RolePrefs.load(ctx, pref)?.optInt("threads", 0) ?: 0)
+        }
+    }
+
+    override fun args(bin: File, target: File) = Cpu.pinLittle(listOf(bin.absolutePath, "-m", target.absolutePath, "--embedding",
+        "--pooling", "mean", "--host", host, "--port", PORT.toString(), "-c", "2048", "-b", "2048", "-ub", "2048",
+        "-t", threads.toString()), threads)
+
+    override fun prepare(ctx: Context, g: Int): File? {
+        val file = model ?: return null
+        val dir = File(ctx.filesDir, "embed").apply { mkdirs() }
+        val f = File(dir, file)
+        if (f.isFile && f.length() > 0 && (size <= 0 || f.length() == size)) { pct = 100; return f }
+        dir.listFiles()?.forEach { if (it.name != file && it.name != "$file.part") it.delete() }   // one embedding model kept
+        val src = url?.takeIf { it.isNotEmpty() } ?: throw IllegalStateException("нет адреса модели (search_url)")
+        if (size > 0) {
+            val free = runCatching { StatFs(dir.absolutePath).availableBytes }.getOrDefault(Long.MAX_VALUE)
+            if (free < size + (64L shl 20)) throw java.io.IOException("мало места: нужно ${size shr 20} МБ, свободно ${free shr 20} МБ")
+        }
+        state = "downloading"
+        return Fetch.file(src, dir, file, size, { alive(g) }, { pct = it }, ::log)
+    }
+
+    fun json(): JSONObject = JSONObject().put("state", state).put("port", PORT).put("pct", pct).put("threads", threads).apply {
+        model?.let { put("model", it) }; error?.let { put("error", it.take(200)) }
     }
 }
 

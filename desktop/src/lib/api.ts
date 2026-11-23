@@ -1,6 +1,6 @@
 // Thin bridge to the Rust side. Falls back to mock data when opened in a plain browser (npm run dev).
 import type {
-  ClusterNode, ClusterSnapshot, DiscoveredNode, DraftStatus, EngineView, HelperDelta, HelperReply, HelperView, ModelEntry, NodeRole, SplitEntry, SplitPlan,
+  ClusterNode, ClusterSnapshot, DiagReport, DiagStep, DiagVerdict, DiscoveredNode, DraftStatus, EngineView, HelperDelta, HelperReply, HelperView, ModelEntry, NodeRole, SplitEntry, SplitPlan,
   UpdateProgress, UpdateStatus,
 } from "./types";
 
@@ -89,7 +89,7 @@ export async function onUpdateProgress(cb: (p: UpdateProgress) => void): Promise
 const mockUpdate = (): UpdateStatus => ({
   current: "0.3.1", installKind: "nsis", available: true, skipped: false, checkEnabled: true, checking: false,
   lastCheck: Math.floor(Date.now() / 1000), error: null, busy: false, phase: "", done: 0, total: 0, nodeServerError: "",
-  latest: { version: "0.3.2", tag: "v0.3.2", name: "Argus 0.3.2", url: "https://github.com/femboy1488/Project-argus/releases",
+  latest: { version: "0.3.2", tag: "v0.3.2", name: "Argus 0.3.2", url: "https://github.com/slopmaster1884/Project-argus/releases",
     publishedAt: new Date().toISOString(), hasSums: true, asset: { name: "Argus-Setup.exe", url: "", size: 46_000_000 },
     notes: "## Что нового\n- Пример заметок к релизу\n- **markdown** поддерживается" },
 });
@@ -106,8 +106,9 @@ export const wifiNodeUpdate = (id: string) => (isTauri ? tauriInvoke<string>("wi
 export const rescan = () => (isTauri ? tauriInvoke<void>("rescan") : Promise.resolve());
 export const reconnectNode = (id: string) => (isTauri ? tauriInvoke<void>("reconnect_node", { id }) : Promise.resolve());
 export const restartEngine = () => (isTauri ? tauriInvoke<string>("restart_engine") : Promise.resolve(LLAMA_URL));
-export const addDiscoveredNode = (id: string) =>
-  isTauri ? tauriInvoke<string>("add_discovered_node", { id }) : (mockAddLan(id.replace(/^lan:/, ""), mock.found.find((d) => d.id === id)?.name), Promise.resolve(id));
+/** `pin`: the node's beacon says `auth` (secured RPC) — 6 digits shown on the node. Error "PIN_REQUIRED: …" = ask for it. */
+export const addDiscoveredNode = (id: string, pin?: string) =>
+  isTauri ? tauriInvoke<string>("add_discovered_node", { id, pin: pin ?? null }) : (mockAddLan(id.replace(/^lan:/, ""), mock.found.find((d) => d.id === id)?.name), Promise.resolve(id));
 export const setAutoAdd = (enabled: boolean) => (isTauri ? tauriInvoke<void>("set_auto_add", { enabled }) : (mock.autoAdd = enabled, Promise.resolve()));
 
 export interface PlatformInfo { os: "windows" | "linux" | "macos"; shell: string; screen: boolean }
@@ -180,7 +181,7 @@ export async function onHelperStream(cb: (d: HelperDelta) => void): Promise<() =
   return listen<HelperDelta>("helper-stream", (e) => cb(e.payload));
 }
 
-/** Ready helpers of a snapshot (only while the experiment is on). */
+/** Ready helpers of a snapshot (only while «Роли» are on — the default since 0.4). */
 export const readyHelpers = (s: ClusterSnapshot | null): HelperView[] => (s?.rolesEnabled ? s.helpers.filter((h) => h.ready) : []);
 
 /** Removes Qwen3 `<think>…</think>` blocks. */
@@ -240,12 +241,17 @@ const MOCK_TEMP: Record<string, number> = { R52T1234: 36.5, R58N9ABC: 44.2, RZ8R
 export const modelStatus = () => (isTauri ? tauriInvoke<boolean>("model_status") : Promise.resolve(true));
 
 // ---- nodes / settings
-export const addLanNode = (address: string, name?: string) =>
-  isTauri ? tauriInvoke<string>("add_lan_node", { address, name: name ?? null }) : mockAddLan(address, name);
+export const addLanNode = (address: string, name?: string, pin?: string) =>
+  isTauri ? tauriInvoke<string>("add_lan_node", { address, name: name ?? null, pin: pin ?? null }) : mockAddLan(address, name);
+/** backend error asking for the node's PIN (secured RPC) */
+export const isPinRequired = (e: unknown) => String(e).includes("PIN_REQUIRED");
 export const removeLanNode = (id: string) =>
   isTauri ? tauriInvoke<void>("remove_lan_node", { id }) : (mock.lan = mock.lan.filter((n) => n.id !== id), Promise.resolve());
 export const testLanNode = (address: string) =>
   isTauri ? tauriInvoke<string>("test_lan_node", { address }) : Promise.resolve("rpc v8.0.0 · 1 устр. · 5.8 / 7.6 GB свободно (демо)");
+/** «Проверить связь»: subnet → beacon → TCP → HELLO, then a verdict with fix hints (netdiag.rs, ≤ ~6 s). */
+export const diagnoseNode = (ip: string, port = 50052) =>
+  isTauri ? tauriInvoke<DiagReport>("diagnose_node", { ip, port }) : mockDiagnose(ip, port);
 export const setNodeWeight = (id: string, weight: number) =>
   isTauri ? tauriInvoke<void>("set_node_weight", { id, weight }) : (mock.weights[id] = weight, Promise.resolve());
 export const setNodeEnabled = (id: string, enabled: boolean) =>
@@ -299,6 +305,13 @@ export async function runTool(name: string, args: Record<string, unknown>): Prom
       return { text: hits.length ? hits.map((h) => `${h.title} — path: ${h.path}${h.snippet ? `\n  ${h.snippet}` : ""}`).join("\n") : "ничего не найдено" };
     }
     case "wiki_read": return { text: await kiwixRead(String(args.path ?? "")) };
+    case "subtask": {
+      const k = String(args.kind ?? "summarize");
+      const kind: SubtaskKind = k === "translate" || k === "extract" ? k : "summarize";
+      const r = await subtaskRun(kind, String(args.text ?? ""), args.lang ? String(args.lang) : undefined, args.instruction ? String(args.instruction) : undefined);
+      const who = r.nodes.length ? `Помощник: ${r.nodes.join(", ")}` : "главная модель";
+      return { text: `[выполнил: ${who}]\n${r.content}` };
+    }
     default: throw new Error(`неизвестный инструмент: ${name}`);
   }
 }
@@ -458,6 +471,33 @@ export async function chatWithTools(messages: ApiMessage[], tools: unknown[], si
 
 // ---------------------------------------------------------------- browser mocks
 
+/** mock «Проверить связь»: the demo Raspberry Pi (.30) is issue #3 (beacon OK, ufw drops TCP), the Pixel (.77) is fine,
+ *  *.99 = rpc-server not running, another /24 = different subnet, anything else = AP isolation. */
+function mockDiagnose(ip: string, port: number): Promise<DiagReport> {
+  const local = "192.168.1.10";
+  const same = ip.split(".").slice(0, 3).join(".") === "192.168.1";
+  const last = ip.split(".").pop();
+  const verdict: DiagVerdict = !/^\d+\.\d+\.\d+\.\d+$/.test(ip) ? "unknown" : !same ? "different_subnet"
+    : last === "30" ? "firewall_likely" : last === "77" ? "ok" : last === "99" ? "rpc_not_running" : "ap_isolation_likely";
+  const beacon = verdict === "firewall_likely" || verdict === "ok" || verdict === "rpc_not_running";
+  const tcp = verdict === "ok" ? "ok" : verdict === "rpc_not_running" ? "refused" : "timeout";
+  const steps: DiagStep[] = [
+    { id: "subnet", ok: same, skipped: false, ms: 0, code: same ? "same" : "different", arg: local, detail: `PC ${local} → node ${ip}` },
+    { id: "beacon", ok: beacon, skipped: false, ms: 0, code: beacon ? "fresh" : "notSeen", arg: beacon ? "1" : null, detail: "" },
+    { id: "tcp", ok: tcp === "ok", skipped: false, ms: tcp === "timeout" ? 3000 : 4, code: tcp,
+      arg: null, detail: tcp === "refused" ? "Connection refused (os error 111)" : tcp === "timeout" ? "no answer in 3 s" : "" },
+    { id: "hello", ok: tcp === "ok", skipped: tcp !== "ok", ms: tcp === "ok" ? 6 : 0, code: tcp === "ok" ? "ok" : "skipped", arg: tcp === "ok" ? "v8.0.0" : null, detail: "" },
+  ];
+  const hints: Record<DiagVerdict, DiagReport["hints"]> = {
+    ok: [], firewall_likely: ["linuxScript", "linuxUfw", "linuxFirewalld", "windowsFirewall"], rpc_not_running: ["restartNode", "checkPort"],
+    different_subnet: ["sameWifi", "guestNetwork", "checkIp"], ap_isolation_likely: ["apIsolation", "guestNetwork", "deviceOn", "pcFirewall"],
+    version_mismatch: ["updateNode"], rpc_busy: ["busy"], unreachable: ["deviceOn", "checkIp", "sameWifi"],
+    unknown: ["linuxScript", "windowsFirewall", "apIsolation", "restartNode"],
+  };
+  const report: DiagReport = { ip, port, localIp: local, steps, verdict, hints: hints[verdict], totalMs: steps.reduce((a, s) => a + s.ms, 0) };
+  return new Promise((r) => setTimeout(() => r(report), 1200));
+}
+
 const mock = {
   found: [
     { id: "lan:192.168.1.77:50052", endpoint: "192.168.1.77:50052", name: "Pixel 7 (Wi-Fi)", ramMb: 7600, freeMb: 3900, variant: "i8mm", ageSec: 1, added: false, appVersion: "0.3", appVc: 4, outdated: true },
@@ -489,7 +529,7 @@ const MOCK_HELPER_MODELS = [
 ];
 
 function mockSetRole(id: string, role: NodeRole) {
-  if (role === "helper" && !mock.rolesEnabled) return Promise.reject("Роль «Помощник» доступна, когда включён эксперимент «Роли»");
+  if (role === "helper" && !mock.rolesEnabled) return Promise.reject("Роль «Помощник» доступна, когда включены «Роли» (Кластер)");
   if (role === "auto") delete mock.roles[id]; else mock.roles[id] = role;
   if (role === "helper") mock.helperSince[id] = Date.now();
   return Promise.resolve();
@@ -548,7 +588,7 @@ function mockPlan(needMb: number | null, snap?: { gpus: ClusterNode[]; nodes: Cl
 }
 
 function mockHelperChat(messages: ApiMessage[], o: HelperChatOpts): Promise<HelperReply> {
-  if (!mock.rolesEnabled) return Promise.reject("Эксперимент «Роли» выключен");
+  if (!mock.rolesEnabled) return Promise.reject("Роли выключены (Кластер → «Роли»)");
   const { nodes } = mockNodes();
   const ready = nodes.filter((n) => n.helper?.ready);
   const n = o.node ? ready.find((x) => x.id === o.node) : ready[0];
@@ -689,10 +729,13 @@ export interface NodeRolesView {
   voice: boolean; voiceModel: VoiceModelId; voiceThreads: number; library: boolean;
   models: { id: VoiceModelId; label: string; sizeMb: number }[];
   downloadPct: number | null; downloadError: string | null; modelOnPc: boolean;
-  node: { voice?: NodeRoleReport; library?: NodeRoleReport } | null; note: string;
+  node: { voice?: NodeRoleReport; library?: NodeRoleReport; embeddings?: NodeRoleReport } | null; note: string;
+  /** 0.4 «Поиск» (embeddings for «Знания»); offered only when the node reports it (Argus Node 0.4+) */
+  search?: boolean; searchSupported?: boolean; searchModelOnPc?: boolean; searchDownloadPct?: number | null; searchDownloadError?: string | null;
 }
 const mockRoles: NodeRolesView = {
   voice: false, voiceModel: "base", voiceThreads: 0, library: false, downloadPct: null, downloadError: null, modelOnPc: false, node: null, note: "",
+  search: false, searchSupported: true, searchModelOnPc: true, searchDownloadPct: null, searchDownloadError: null,
   models: [{ id: "tiny", label: "tiny · 75 МБ · самый быстрый", sizeMb: 75 }, { id: "base", label: "base · 142 МБ · баланс", sizeMb: 142 }, { id: "small", label: "small · 466 МБ · точнее, медленнее", sizeMb: 466 }],
 };
 export const nodeRolesGet = (id: string) => (isTauri ? tauriInvoke<NodeRolesView>("node_roles_get", { id }) : Promise.resolve(mockRoles));
@@ -700,6 +743,8 @@ export const nodeRolesGet = (id: string) => (isTauri ? tauriInvoke<NodeRolesView
 export const setNodeVoice = (id: string, enabled: boolean, model?: VoiceModelId, threads?: number) =>
   (isTauri ? tauriInvoke<void>("set_node_voice", { id, enabled, model: model ?? null, threads: threads ?? null }) : Promise.resolve());
 export const setNodeLibrary = (id: string, enabled: boolean) => (isTauri ? tauriInvoke<void>("set_node_library", { id, enabled }) : Promise.resolve());
+export const setNodeSearch = (id: string, enabled: boolean) =>
+  (isTauri ? tauriInvoke<void>("set_node_search", { id, enabled }) : (mockRoles.search = enabled, Promise.resolve()));
 /** invoke a command that may not exist in this build: resolves null instead of throwing */
 export async function invokeOptional<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   if (!isTauri) return null;
@@ -725,15 +770,26 @@ export async function routeTarget(prompt: string, hasAttachments = false): Promi
   return tauriInvoke<_RouteTarget>("route_target", { prompt, hasAttachments });
 }
 
+// ---- 0.4 agent subtasks (helper.rs subtask_run): a ready Помощник node, else the main model ----
+export type SubtaskKind = "summarize" | "translate" | "extract";
+export interface SubtaskReply { content: string; by: "helper" | "main"; nodes: string[] }
+export async function subtaskRun(kind: SubtaskKind, text: string, lang?: string, instruction?: string): Promise<SubtaskReply> {
+  if (isTauri) return tauriInvoke<SubtaskReply>("subtask_run", { kind, text, lang: lang ?? null, instruction: instruction ?? null });
+  return { content: `(демо) ${kind}: ${text.slice(0, 120)}`, by: "main", nodes: [] };
+}
+
 // ---- «Очередь» и «Знания» (queue.rs / rag.rs / kiwix.rs) ----
 export type QueueKind = "translate" | "summarize" | "custom";
 export interface QueueJob {
   id: string; kind: QueueKind; prompt: string; lang: string; inDir: string; outDir: string; startAt: number | null;
   status: "pending" | "running" | "done" | "error"; progress: number; message: string; doneFiles: string[]; totalFiles: number;
   current: string | null; errors: string[]; created: number;
+  /** 0.4: "auto" = a ready Помощник first, the main model as fallback; "main" = main model only ("" = old job = main) */
+  route?: QueueRoute; doneBy?: string[];
 }
+export type QueueRoute = "auto" | "main" | "";
 export interface QueueState { running: boolean; jobs: QueueJob[] }
-export interface NewQueueJob { kind: QueueKind; prompt: string; lang: string; inDir: string; outDir: string; startAt: number | null }
+export interface NewQueueJob { kind: QueueKind; prompt: string; lang: string; inDir: string; outDir: string; startAt: number | null; route?: QueueRoute }
 const noTauri = () => Promise.reject(new Error("Доступно только в приложении"));
 export const queueList = () => (isTauri ? tauriInvoke<QueueState>("queue_list") : Promise.resolve({ running: false, jobs: [] }));
 export const queueAdd = (job: NewQueueJob) => (isTauri ? tauriInvoke<QueueState>("queue_add", { job }) : noTauri());

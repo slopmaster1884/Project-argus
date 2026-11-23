@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import { useCluster } from "../store/cluster";
 import { gb, pct } from "../lib/format";
 
@@ -14,20 +15,20 @@ export default function MemoryPool() {
 
   return (
     <div className="panel">
-      <div className="panel-head"><span>Memory Pool</span><span className="font-mono normal-case tracking-normal text-pl-dim">VRAM + RAM via RPC</span></div>
+      <div className="panel-head"><span>{tr("Пул памяти", "Memory Pool")}</span><span className="font-mono normal-case tracking-normal text-pl-dim">{tr("VRAM + RAM через RPC", "VRAM + RAM via RPC")}</span></div>
       <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-6">
         <div className="lg:pr-6">
-          <div className="label">Total cluster memory</div>
+          <div className="label">{tr("Память кластера", "Total cluster memory")}</div>
           <div className="mt-1 flex items-baseline gap-1 font-mono">
             <span className="text-4xl font-semibold text-pl-text">{gb(total)}</span>
             <span className="text-sm text-pl-mute">GB</span>
           </div>
           <div className="mt-1 font-mono text-2xs text-pl-dim">
-            <span className="text-pl-green">{gb(usable)} GB</span> allocatable · {nodes.length} nodes
+            <span className="text-pl-green">{gb(usable)} GB</span> {tr("доступно", "allocatable")} · {nodes.length} {tr("уст.", "nodes")}
           </div>
         </div>
         <div className="flex min-w-0 flex-col justify-center">
-          <div className="flex h-6 w-full gap-px overflow-hidden bg-pl-bg0 p-px">
+          <div className="flex h-7 w-full gap-px overflow-hidden rounded-md border border-pl-line/60 bg-pl-bg0 p-px">
             {nodes.map((n, i) => (
               <div key={n.id} title={`${n.name}: ${gb(n.totalMb)} GB · ${gb(n.usableMb)} GB allocatable`} className="relative h-full min-w-[2px] shrink overflow-hidden transition-[width] duration-700 ease-out"
                 style={{ width: `${pct(n.totalMb, shownMb)}%`, background: `${NODE_COLORS[i % 6]}26`, borderTop: `2px solid ${NODE_COLORS[i % 6]}` }}>
@@ -43,7 +44,7 @@ export default function MemoryPool() {
                 {n.name} <span className="text-pl-dim">{gb(n.totalMb)} / {gb(n.usableMb)} GB</span>
               </span>
             ))}
-            <span className="ml-auto hidden text-pl-dim xl:inline">solid = allocatable · tint = reserved headroom</span>
+            <span className="ml-auto hidden text-pl-dim xl:inline">{tr("заливка = доступно · фон = запас", "solid = allocatable · tint = reserved headroom")}</span>
           </div>
         </div>
       </div>

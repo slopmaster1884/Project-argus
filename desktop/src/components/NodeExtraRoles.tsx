@@ -1,11 +1,14 @@
-// «Голос» и «Библиотека» на ноде (roles_extra.rs). Показывается в инспекторе ноды.
+// «Голос», «Библиотека» и (0.4) «Поиск» на ноде (roles_extra.rs). Показывается в инспекторе ноды.
+// «Поиск» предлагается только нодам, которые сообщают эту роль (Argus Node 0.4+).
 import { useCallback, useEffect, useState } from "react";
 import { Toggle } from "./ChatView";
 import { Progress } from "./Meter";
 import { useCluster } from "../store/cluster";
-import { nodeRolesGet, nodesvcList, setNodeLibrary, setNodeVoice } from "../lib/api";
+import { nodeRolesGet, nodesvcList, setNodeLibrary, setNodeSearch, setNodeVoice } from "../lib/api";
+import { useT } from "../lib/i18n";
 import type { NodeRoleReport, NodeRolesView, NodeService, VoiceModelId } from "../lib/api";
 import type { ClusterNode } from "../lib/types";
+import { toastError } from "../lib/errors";
 
 const STATE_RU: Record<string, string> = {
   idle: "выключен", downloading: "получает модель", starting: "запускается", loading: "запускается", ready: "работает", error: "ошибка",
@@ -28,6 +31,7 @@ function stateText(r: NodeRoleReport | undefined, svc: NodeService | undefined):
 
 export default function NodeExtraRoles({ node }: { node: ClusterNode }) {
   const pushToast = useCluster((s) => s.pushToast);
+  const t = useT();
   const [v, setV] = useState<NodeRolesView | null>(null);
   const [svc, setSvc] = useState<NodeService[]>([]);
 
@@ -40,7 +44,8 @@ export default function NodeExtraRoles({ node }: { node: ClusterNode }) {
   if (!v) return null;
   const whisper = svc.find((s) => s.service === "whisper");
   const kiwix = svc.find((s) => s.service === "kiwix");
-  const err = (e: unknown) => pushToast("error", String(e));
+  const embed = svc.find((s) => s.service === "embeddings");
+  const err = (e: unknown) => toastError(e);
 
   async function voice(on: boolean, model?: VoiceModelId, threads?: number) {
     try { await setNodeVoice(node.id, on, model, threads); load(); } catch (e) { err(e); }
@@ -48,14 +53,20 @@ export default function NodeExtraRoles({ node }: { node: ClusterNode }) {
   async function library(on: boolean) {
     try { await setNodeLibrary(node.id, on); load(); } catch (e) { err(e); }
   }
+  async function search(on: boolean) {
+    try { await setNodeSearch(node.id, on); load(); } catch (e) { err(e); }
+  }
 
   const voiceState = stateText(v.node?.voice, whisper);
   const libState = stateText(v.node?.library, kiwix);
+  const searchState = stateText(v.node?.embeddings, embed);
+  // an old node (no «Поиск» in its report) is not offered the role; one that has it on can still switch it off
+  const searchOffer = !!v.searchSupported || !!v.search;
   const lan = node.transport === "lan";
 
   return (
     <div className="space-y-2 border-t border-pl-line pt-3">
-      <div className="label">Голос и библиотека</div>
+      <div className="label">{searchOffer ? t("roles.extra") : "Голос и библиотека"}</div>
 
       <Toggle on={v.voice} set={(on) => voice(on)} label="Голос" sub="распознаёт речь для кнопки микрофона в чате" />
       {v.voice && (
@@ -86,6 +97,22 @@ export default function NodeExtraRoles({ node }: { node: ClusterNode }) {
 
       <Toggle on={v.library} set={library} label="Библиотека" sub=".zim выбирается на телефоне в Argus Node" />
       {v.library && libState && <p className="pl-1 text-2xs text-pl-dim">На телефоне: {libState}{v.node?.library?.zim ? ` · ${v.node.library.zim}` : ""}</p>}
+
+      {searchOffer && <Toggle on={!!v.search} set={search} label={t("search.label")} sub={t("search.sub")} />}
+      {v.search && (
+        <div className="space-y-1.5 pl-1">
+          {!v.searchSupported && <p className="text-2xs leading-4 text-pl-dim">{t("search.old")}</p>}
+          {v.searchSupported && !v.searchModelOnPc && v.searchDownloadError && <p className="text-2xs leading-4 text-pl-red">{t("search.dlError").replace("{e}", v.searchDownloadError)}</p>}
+          {v.searchSupported && !v.searchModelOnPc && !v.searchDownloadError && (
+            <div>
+              <div className="mb-1 text-2xs text-pl-dim">{t("search.pcDownload")}{v.searchDownloadPct != null ? ` · ${v.searchDownloadPct}%` : "…"}</div>
+              <Progress value={v.searchDownloadPct ?? null} />
+            </div>
+          )}
+          {v.searchSupported && v.searchModelOnPc && searchState && <p className="text-2xs text-pl-dim">{t("search.onPhone").replace("{s}", searchState)}</p>}
+          {v.searchSupported && v.searchModelOnPc && !searchState && <p className="text-2xs text-pl-dim">{lan ? t("search.waitLan") : t("search.waitUsb")}</p>}
+        </div>
+      )}
 
       {v.note && <p className="text-2xs leading-4 text-pl-gold">{v.note}</p>}
     </div>

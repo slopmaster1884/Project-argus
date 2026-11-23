@@ -40,6 +40,10 @@ import kotlin.concurrent.thread
  * announces the node every 2 s by UDP broadcast to :50053 so Argus on the PC can find it on the LAN.
  * rpc-server has no auth — home network only.
  *
+ * Secured mode (opt-in, off by default; toggle in MainActivity / `--ez secure true|false`, prefs "node"/"secure_mode"):
+ * only together with Wi-Fi mode. rpc-server then binds 127.0.0.1:[INTERNAL_PORT] and [AuthGateway] owns
+ * 0.0.0.0:50052 (PIN pairing + token handshake, docs/SECURITY.md); the beacon carries "auth":1.
+ *
  * rpc-server binaries are prebuilt (scripts/build-rpc-variants-zig.sh) with the local llama.cpp patch
  * accept() -> accept4(..., SOCK_CLOEXEC): Android's app seccomp filter kills plain accept() with SIGSYS.
  */
@@ -65,6 +69,9 @@ class RpcService : Service() {
         const val BEACON_PORT = 50053
         const val PREFS = "node"
         const val PREF_WIFI = "wifi_mode"
+        const val PREF_SECURE = "secure_mode"
+        const val INTERNAL_PORT = 50072       // rpc-server behind the auth gateway (secured mode)
+        @Volatile var secure = false           // secured mode active for the running rpc-server (Wi-Fi + pref)
         @Volatile var wifi = false             // mode the running rpc-server was started in
         @Volatile var host = "127.0.0.1"
         @Volatile var wifiIp: String? = null
@@ -74,6 +81,12 @@ class RpcService : Service() {
         fun wifiPref(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PREF_WIFI, false)
         fun setWifiPref(ctx: Context, on: Boolean) =
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(PREF_WIFI, on).apply()
+        fun securePref(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PREF_SECURE, false)
+        fun setSecurePref(ctx: Context, on: Boolean) =
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(PREF_SECURE, on).apply()
+        /** where rpc-server itself listens: behind the gateway in secured mode */
+        val rpcHost get() = if (secure) "127.0.0.1" else host
+        val rpcPort get() = if (secure) INTERNAL_PORT else port
 
         /** IPv4 of the Wi-Fi interface (wlanN, then apN) or any site-local one; with its broadcast address. */
         fun lanAddress(): Pair<Inet4Address, InetAddress?>? = runCatching {
@@ -146,7 +159,9 @@ class RpcService : Service() {
         // explicit extra (adb: --ez wifi true|false) switches the mode and is remembered; absent = keep saved mode,
         // so the PC's plain USB start never drops a phone out of Wi-Fi mode (0.0.0.0 also covers adb forward).
         if (intent?.hasExtra("wifi") == true) setWifiPref(this, intent.getBooleanExtra("wifi", false))
+        if (intent?.hasExtra("secure") == true) setSecurePref(this, intent.getBooleanExtra("secure", false))
         val wantWifi = wifiPref(this)
+        val wantSecure = wantWifi && securePref(this)
         startForegroundCompat(wantWifi)
         val v = packageManager.getPackageInfo(packageName, 0)
         val line = "$VERSION_TAG ${v.versionName} (${v.longVersionCode})"
@@ -168,18 +183,18 @@ class RpcService : Service() {
         // Idempotent: the PC re-runs `am start-foreground-service` on every reconnect. A live supervisor with the
         // same mode/port keeps its rpc-server (a second one would fail with "address in use").
         if (supervisorAlive()) {
-            if (wantWifi == wifi && wantPort == port && !(forced > 0 && forced != threads)) {
+            if (wantWifi == wifi && wantSecure == secure && wantPort == port && !(forced > 0 && forced != threads)) {
                 addLog("already running (${if (wifi) "Wi-Fi" else "USB"} $host:$port, pid alive=${proc?.isAlive == true}) → reuse")
                 if (wifi) startWifiExtras()
                 return START_STICKY
             }
-            addLog("reconfigure: ${if (wantWifi) "Wi-Fi 0.0.0.0" else "USB 127.0.0.1"}:$wantPort t=$wantThreads → restarting rpc-server")
-            applyConfig(wantWifi, wantPort, wantThreads, forced > 0)
+            addLog("reconfigure: ${if (wantWifi) "Wi-Fi 0.0.0.0" else "USB 127.0.0.1"}:$wantPort${if (wantSecure) " (secured)" else ""} t=$wantThreads → restarting rpc-server")
+            applyConfig(wantWifi, wantPort, wantThreads, forced > 0, wantSecure)
             reconfig = true; proc?.destroy()          // supervisor relaunches immediately with the new config
             return START_STICKY
         }
 
-        applyConfig(wantWifi, wantPort, wantThreads, forced > 0)
+        applyConfig(wantWifi, wantPort, wantThreads, forced > 0, wantSecure)
         stopping = false
         if (wakeLock?.isHeld != true) {
             wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
@@ -193,7 +208,7 @@ class RpcService : Service() {
     override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
         writer.println(Helper.dumpLine())
         writer.println("argus-status " + statusJson())   // 0.3.3: one-line JSON (telemetry + roles), see docs/ROLES.md
-        writer.println("argus-rpc state=$state mode=${if (wifi) "wifi" else "usb"} port=$port threads=$threads variant=$variant clients=$clients restarts=$restarts")
+        writer.println("argus-rpc state=$state mode=${if (wifi) "wifi" else "usb"} secure=$secure port=$port threads=$threads variant=$variant clients=$clients restarts=$restarts")
         writer.println("argus-bench gbps=${Bench.cached(this)?.let { "%.2f".format(Locale.US, it) } ?: "-"} threads=${Bench.threads} running=${Bench.running}")
         writer.flush()
     }
@@ -205,17 +220,19 @@ class RpcService : Service() {
         Telemetry.put(this, j)
         wifiIp?.let { j.put("wifi_ip", it) }
         j.put("rpc", JSONObject().put("state", state.name.lowercase()).put("port", port).put("threads", threads)
-            .put("big_cores", bigCores).put("variant", variant).put("mode", if (wifi) "wifi" else "usb"))
+            .put("big_cores", bigCores).put("variant", variant).put("mode", if (wifi) "wifi" else "usb")
+            .put("auth", secure))         // secured mode: the PC keeps a USB node on the adb forward (tether.rs)
         j.put("roles", Roles.json())
         return j.toString()
     }
 
     private fun supervisorAlive() = supervisor?.isAlive == true && !stopping
 
-    private fun applyConfig(w: Boolean, p: Int, t: Int, forced: Boolean) {
-        wifi = w; host = if (w) "0.0.0.0" else "127.0.0.1"; port = p; threads = t
+    private fun applyConfig(w: Boolean, p: Int, t: Int, forced: Boolean, s: Boolean = false) {
+        wifi = w; host = if (w) "0.0.0.0" else "127.0.0.1"; port = p; threads = t; secure = w && s
         addLog("cpu tiers: $coreTiers → threads=$threads" + if (forced) " (forced)" else " (big cores)")
         if (w) startWifiExtras() else stopWifiExtras()
+        if (secure) AuthGateway.start(applicationContext, port, INTERNAL_PORT) else AuthGateway.stop()
         startForegroundCompat(w)
     }
 
@@ -265,6 +282,7 @@ class RpcService : Service() {
                     .apply { Bench.cached(this@RpcService)?.let { put("bench", Math.round(it * 100.0) / 100.0) } }   // 0.3.2: autobench GB/s
                     .let { Telemetry.put(this@RpcService, it) }   // 0.3.3: temp_c, throttled, battery_pct, charging, usb_net_ip
                     .put("roles", Roles.json())                      // 0.3.3: {helper,voice,library:{state,port,...}}
+                    .apply { if (secure) put("auth", 1) }           // secured RPC: Argus asks for the PIN on «Добавить»
                     .toString().toByteArray()
                 val targets = linkedSetOf<InetAddress>(InetAddress.getByName("255.255.255.255"))
                 (lan?.second ?: dhcpBroadcast())?.let { targets.add(it) }
@@ -315,7 +333,7 @@ class RpcService : Service() {
     }
 
     private fun portFree(): Boolean = runCatching {
-        ServerSocket().use { it.reuseAddress = true; it.bind(InetSocketAddress(host, port)) }; true
+        ServerSocket().use { it.reuseAddress = true; it.bind(InetSocketAddress(rpcHost, rpcPort)) }; true
     }.getOrDefault(false)
 
     private fun supervise() {
@@ -323,7 +341,7 @@ class RpcService : Service() {
         killOrphans()
         try { while (!stopping) {
             if (!portFree()) {      // something still holds the port (orphan exiting, TIME_WAIT): wait, don't double-bind
-                killOrphans(); addLog("port $port busy — waiting"); state = State.RESTARTING
+                killOrphans(); addLog("port $rpcPort busy — waiting"); state = State.RESTARTING
                 repeat(10) { if (!stopping && !portFree()) Thread.sleep(500) }
             }
             val started = SystemClock.elapsedRealtime()
@@ -350,8 +368,9 @@ class RpcService : Service() {
     private fun runOnce(): Int? {
         val bin = pickBinary()
         val cache = File(cacheDir(this), "rpc").apply { mkdirs() }   // rpc-server uses $LLAMA_CACHE/rpc
-        val cmd = listOf(bin.absolutePath, "-H", host, "-p", port.toString(), "-t", threads.toString(), "-c")
-        addLog("exec: ${bin.name} [$variant] -H $host -p $port -t $threads -c (cache ${cache.absolutePath})")
+        val (h, pt) = rpcHost to rpcPort
+        val cmd = listOf(bin.absolutePath, "-H", h, "-p", pt.toString(), "-t", threads.toString(), "-c")
+        addLog("exec: ${bin.name} [$variant] -H $h -p $pt -t $threads -c (cache ${cache.absolutePath})" + if (secure) " — secured, gateway :$port" else "")
         state = State.STARTING; clients = 0; startedAt = SystemClock.elapsedRealtime()
         val p = try {
             ProcessBuilder(cmd)
@@ -402,7 +421,8 @@ class RpcService : Service() {
         supervisor?.interrupt(); supervisor = null
         state = State.OFF
         stopWifiExtras()
-        Helper.stop("node stopped"); Voice.stop("node stopped"); Library.stop("node stopped")   // assignments stay persisted
+        AuthGateway.stop()
+        Helper.stop("node stopped"); Voice.stop("node stopped"); Library.stop("node stopped"); Embeddings.stop("node stopped")   // assignments stay persisted
         wakeLock?.takeIf { it.isHeld }?.release()
         addLog("node stopped")
         super.onDestroy()
@@ -414,7 +434,7 @@ class RpcService : Service() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, CHANNEL)
             .setContentTitle(if (wifiMode) "Argus: узел активен (Wi-Fi)" else "Argus: узел активен")
-            .setContentText(if (wifiMode) "RPC на 0.0.0.0:$WIFI_PORT — только домашняя сеть" else "Делится ОЗУ и CPU с ПК по USB")
+            .setContentText(if (wifiMode && secure) "RPC на :$WIFI_PORT · защищённый режим (PIN)" else if (wifiMode) "RPC на 0.0.0.0:$WIFI_PORT — только домашняя сеть" else "Делится ОЗУ и CPU с ПК по USB")
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentIntent(open)
             .setOngoing(true)
